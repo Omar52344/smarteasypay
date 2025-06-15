@@ -65,7 +65,7 @@ const operators = {
 export default function SmartContractBuilder() {
   const [nodes, setNodes] = useState<WalletNode[]>([
     {
-      id: "1",
+      id: crypto.randomUUID(),
       name: "Billetera Principal",
       address: "0x1234...5678",
       x: 400,
@@ -129,7 +129,6 @@ export default function SmartContractBuilder() {
     },
     [nodes],
   )
-
   const addCondition = useCallback(
     (nodeId: string) => {
       const newCondition: Condition = {
@@ -138,14 +137,17 @@ export default function SmartContractBuilder() {
         operator: "equals",
         value: "",
         label: "Nueva condición",
-      }
-
-      updateNode(nodeId, {
-        conditions: [...(nodes.find((n) => n.id === nodeId)?.conditions || []), newCondition],
-      })
+      };
+      setNodes((prevNodes) =>
+        prevNodes.map((node) =>
+          node.id === nodeId
+            ? { ...node, conditions: [...(node.conditions || []), newCondition] }
+            : node
+        )
+      );
     },
-    [nodes, updateNode],
-  )
+    [] // No necesitas nodes ni updateNode como dependencias
+  );
 
   const updateCondition = useCallback(
     (nodeId: string, conditionId: string, updates: Partial<Condition>) => {
@@ -316,12 +318,14 @@ export default function SmartContractBuilder() {
     return () => document.removeEventListener("mousemove", handleMouseMove)
   }, [isConnecting, connectionStart, nodes])
 
-/*useEffect(() => {
-  // Force update node positions in state when they change
-
-  //console.log(nodes)
-  //updateNodePositions();
-}, [nodes]);*/
+  useEffect(() => {
+    if (selectedNode) {
+      const updatedNode = nodes.find((n) => n.id === selectedNode.id);
+      if (updatedNode) {
+        setSelectedNode(updatedNode);
+      }
+    }
+  }, [nodes, selectedNode]);
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -818,7 +822,14 @@ export default function SmartContractBuilder() {
       </div>
 
       {/* Configuration Dialog */}
-      <Dialog open={isConfigOpen} onOpenChange={setIsConfigOpen}>
+      <Dialog open={isConfigOpen} onOpenChange={(open) => {
+        setIsConfigOpen(open);
+        // Update selectedNode when dialog opens to ensure latest state
+        if (open && selectedNode) {
+          const updatedNode = nodes.find(n => n.id === selectedNode.id);
+          setSelectedNode(updatedNode || null);
+        }
+      }}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Configurar Billetera: {selectedNode?.name}</DialogTitle>
@@ -849,7 +860,7 @@ export default function SmartContractBuilder() {
               <Separator />
 
               {/* Logic Type */}
-              {selectedNode.conditions.length > 1 && (
+              {selectedNode.conditions.length >= 1 && (
                 <div className="space-y-2">
                   <Label>Lógica de Condiciones</Label>
                   <div className="flex items-center space-x-4">
@@ -870,10 +881,13 @@ export default function SmartContractBuilder() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <Label className="text-base font-semibold">Condiciones</Label>
-                  <Button onClick={() => addCondition(selectedNode.id)} size="sm">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Agregar Condición
-                  </Button>
+                  <Button onClick={() => {
+                  addCondition(selectedNode.id);
+
+                }} size="sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Agregar Condición
+                </Button>
                 </div>
 
                 {selectedNode.conditions.length === 0 ? (
@@ -891,7 +905,12 @@ export default function SmartContractBuilder() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => removeCondition(selectedNode.id, condition.id)}
+                              onClick={() => {
+                                removeCondition(selectedNode.id, condition.id);
+                                // Update selectedNode after removing condition
+                                const updatedNode = nodes.find(n => n.id === selectedNode.id);
+                                setSelectedNode(updatedNode || null);
+                              }}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
