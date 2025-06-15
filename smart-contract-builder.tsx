@@ -505,23 +505,15 @@ useEffect(() => {
                   let startX=0, startY=0
                   const childNode = nodes.find((n) => n.id === childId)
                   if (!childNode) return null
-                  if (canvasRef.current) {
-                    const rect = canvasRef.current.getBoundingClientRect()
+                  //if (canvasRef.current) {
+                    //const rect = canvasRef.current.getBoundingClientRect()
                     const startNode = nodes.find((n) => n.id === node.id)
                     if (startNode) {
                       // Calcular punto de salida más cercano al mouse
-                      
                       const childX = childNode.x//- rect.left
                       const childY = childNode.y //- rect.top
-                      console.log(childX,childY,'child')
-
-                      console.log(childX,childY,'child')
-                      console.log(node.x,node.y,'node')
-                      console.log(nodes,'nodes desde nodes maps')
                       const nodeCenterX = startNode.x + 48
                       const nodeCenterY = startNode.y + 48
-                       
-                      
                       const deltaX = childX - nodeCenterX
                       const deltaY = childY - nodeCenterY
                       const angle = Math.atan2(deltaY, deltaX)
@@ -563,51 +555,7 @@ useEffect(() => {
                       
                       pathData = `M ${startX} ${startY} L ${childX} ${childY}`
                     }
-                  }
-                  /*
-                  // Dimensiones exactas del nodo
-                  const nodeSize = 96
-                  const nodeRadius = nodeSize / 2
-
-                  // Centros de los nodos
-                  const parentCenterX = node.x + nodeRadius
-                  const parentCenterY = node.y + nodeRadius
-                  const childCenterX = childNode.x + nodeRadius
-                  const childCenterY = childNode.y + nodeRadius
-
-                  // Vector de dirección
-                  const dx = childCenterX - parentCenterX
-                  const dy = childCenterY - parentCenterY
-                  const distance = Math.sqrt(dx * dx + dy * dy)
-
-                  if (distance === 0) return null
-
-                  // Vector unitario
-                  const unitX = dx / distance
-                  const unitY = dy / distance
-
-                  // Puntos exactamente en los bordes
-                  const startX = node.x//parentCenterX + unitX * nodeRadius
-                  const startY = node.y//parentCenterY + unitY * nodeRadius
-                  const endX = childNode.x//childCenterX - unitX * nodeRadius
-                  const endY = childNode.y//childCenterY - unitY * nodeRadius
-
-                  // Punto medio para la etiqueta
-                  const midX = (startX + endX) / 2
-                  const midY = (startY + endY) / 2
-
-                  // Path de la línea
-                  let pathData
-                  if (distance < 150) {
-                    pathData = `M ${startX} ${startY} L ${endX} ${endY}`
-                    console.log(pathData,'-150')
-                  } else {
-                    const controlOffset = Math.min(distance * 0.25, 50)
-                    const perpX = -unitY * controlOffset
-                    const perpY = unitX * controlOffset
-                    pathData = `M ${startX} ${startY} Q ${midX + perpX} ${midY + perpY} ${endX} ${endY}`
-                     console.log(pathData,'-150')
-                  }*/
+                 
 
                   return (
                     <g key={`${node.id}-${childId}`}>
