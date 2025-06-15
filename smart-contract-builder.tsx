@@ -242,7 +242,7 @@ export default function SmartContractBuilder() {
       const x = info.clientX - rect.left
       const y = info.clientY - rect.top
 
-      console.log(x,y,'info')
+      
       //console.log(x,y,'metodo actualiza x y y')
       // Forzar actualización inmediata
       setNodes((prevNodes) => prevNodes.map((node) => (node.id === nodeId ? { ...node, x, y } : node)))
@@ -303,7 +303,7 @@ export default function SmartContractBuilder() {
             startX = nodeCenterX
             startY = startNode.y
           }
-          console.log(mouseX,mouseY,'mouse posicion')
+          //console.log(mouseX,mouseY,'mouse posicion')
           setTempConnection({
             from: { x: startX, y: startY },
             to: { x: mouseX, y: mouseY },
@@ -316,12 +316,12 @@ export default function SmartContractBuilder() {
     return () => document.removeEventListener("mousemove", handleMouseMove)
   }, [isConnecting, connectionStart, nodes])
 
-useEffect(() => {
+/*useEffect(() => {
   // Force update node positions in state when they change
 
-  console.log(nodes)
+  //console.log(nodes)
   //updateNodePositions();
-}, [nodes]);
+}, [nodes]);*/
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
