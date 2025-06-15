@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useCallback, useEffect } from "react"
-import { motion } from "framer-motion"
+import { motion, PanInfo } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -233,18 +233,28 @@ export default function SmartContractBuilder() {
   }, [])
 
   const handleNodeDrag = useCallback(
-    (nodeId: string, x: number, y: number) => {
-      console.log(x,y,'metodo actualiza x y y')
+    (nodeId: string, info:MouseEvent) => {
+      
+      if (canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect()
+      
+
+      const x = info.clientX - rect.left
+      const y = info.clientY - rect.top
+
+      console.log(x,y,'info')
+      //console.log(x,y,'metodo actualiza x y y')
       // Forzar actualización inmediata
       setNodes((prevNodes) => prevNodes.map((node) => (node.id === nodeId ? { ...node, x, y } : node)))
 
-      console.log(noSSR)
+      //console.log(noSSR)
       // Update temporary connection if dragging during connection mode
-      if (isConnecting && connectionStart === nodeId) {
+      /*if (isConnecting && connectionStart === nodeId) {
         setTempConnection({
           from: { x: x + 48, y: y + 48 },
           to: tempConnection?.to || { x: x + 48, y: y + 48 },
         })
+      }*/
       }
     },
     [isConnecting, connectionStart, tempConnection],
@@ -269,7 +279,6 @@ export default function SmartContractBuilder() {
         const startNode = nodes.find((n) => n.id === connectionStart)
         if (startNode) {
           // Calcular punto de salida más cercano al mouse
-          
           const mouseX = e.clientX - rect.left
           const mouseY = e.clientY - rect.top
           const nodeCenterX = startNode.x + 48
@@ -295,7 +304,6 @@ export default function SmartContractBuilder() {
             startY = startNode.y
           }
           console.log(mouseX,mouseY,'mouse posicion')
-          console.log(nodes,'node desde mouse')
           setTempConnection({
             from: { x: startX, y: startY },
             to: { x: mouseX, y: mouseY },
@@ -505,6 +513,7 @@ useEffect(() => {
                       
                       const childX = childNode.x//- rect.left
                       const childY = childNode.y //- rect.top
+                      console.log(childX,childY,'child')
 
                       console.log(childX,childY,'child')
                       console.log(node.x,node.y,'node')
@@ -705,9 +714,9 @@ useEffect(() => {
                 key={node.id}
                 drag={!isConnecting}
                 dragMomentum={false}
-                onDrag={(_, info) => {
+                onDrag={(event: MouseEvent, info: PanInfo) => {
                   if (!isConnecting) {
-                    handleNodeDrag(node.id, node.x + info.delta.x, node.y + info.delta.y)
+                    handleNodeDrag(node.id, event)
                   }
                 }}
                 className={`absolute ${isConnecting ? "cursor-crosshair" : "cursor-move"}`}
