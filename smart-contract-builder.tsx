@@ -34,6 +34,10 @@ interface WalletNode {
   parentId?: string
   children: string[]
   color: string
+  idPerson?: string
+  Document?:string
+  verifiedWallet?:boolean
+  Metadada?: any[]
 }
 
 const conditionTypes = [
