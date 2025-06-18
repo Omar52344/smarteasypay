@@ -13,14 +13,25 @@ import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { Wallet, Plus, Settings, Copy, Trash2, Calendar, DollarSign, Clock, Save, Play } from "lucide-react"
 import { noSSR } from "next/dynamic"
+import { set } from "date-fns"
+import { ethers } from 'ethers'
+const provider = new ethers.providers.JsonRpcProvider();
+const address = '0x1234...abcd'
 
 interface Condition {
-  id: string
-  type: "date" | "amount" | "expiration"
-  operator: "equals" | "greater" | "less" | "between"
-  value: string | number
-  value2?: string | number
-  label: string
+  idWallet?: string,
+  order?: number,//posicion relativa de izquierda a derecha
+  id: string// id unico de la condicion
+  type: "date" | "amount" | "expiration"//tipo de comparacion
+  operator: "equals" | "greater" | "less" | "between" //operador
+  value: string | number//valor condicion
+  value2?: string | number//valor 2 de condicion
+  label: string//nonbre de condicion
+  groupCondition?: number//grupo de la condicion para hacer agrupamiento anidad
+  logic?: "AND" | "OR"//logic de la condicion
+  logicGroup?: "AND" | "OR"//logica del grupo de la condicion
+  nivelCondicion?: number
+
 }
 
 interface WalletNode {
@@ -35,9 +46,10 @@ interface WalletNode {
   children: string[]
   color: string
   idPerson?: string
-  Document?:string
-  verifiedWallet?:boolean
-  Metadada?: any[]
+  Document?: string
+  verifiedWallet?: boolean
+  Metadada?: any[],
+  valid?: boolean
 }
 
 const conditionTypes = [
@@ -80,12 +92,12 @@ export default function SmartContractBuilder() {
       color: "bg-purple-500",
     },
   ])
-
+  const nodesRef = useRef(nodes)
   const [selectedNode, setSelectedNode] = useState<WalletNode | null>(null)
   const [isConfigOpen, setIsConfigOpen] = useState(false)
   const [draggedNode, setDraggedNode] = useState<string | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
-
+  const [validNodes, setValidNodes] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [connectionStart, setConnectionStart] = useState<string | null>(null)
   const [tempConnection, setTempConnection] = useState<{
@@ -239,28 +251,28 @@ export default function SmartContractBuilder() {
   }, [])
 
   const handleNodeDrag = useCallback(
-    (nodeId: string, info:MouseEvent) => {
-      
+    (nodeId: string, info: MouseEvent) => {
+
       if (canvasRef.current) {
-      const rect = canvasRef.current.getBoundingClientRect()
-      
+        const rect = canvasRef.current.getBoundingClientRect()
 
-      const x = info.clientX - rect.left
-      const y = info.clientY - rect.top
 
-      
-      //console.log(x,y,'metodo actualiza x y y')
-      // Forzar actualización inmediata
-      setNodes((prevNodes) => prevNodes.map((node) => (node.id === nodeId ? { ...node, x, y } : node)))
+        const x = info.clientX - rect.left
+        const y = info.clientY - rect.top
 
-      //console.log(noSSR)
-      // Update temporary connection if dragging during connection mode
-      /*if (isConnecting && connectionStart === nodeId) {
-        setTempConnection({
-          from: { x: x + 48, y: y + 48 },
-          to: tempConnection?.to || { x: x + 48, y: y + 48 },
-        })
-      }*/
+
+        //console.log(x,y,'metodo actualiza x y y')
+        // Forzar actualización inmediata
+        setNodes((prevNodes) => prevNodes.map((node) => (node.id === nodeId ? { ...node, x, y } : node)))
+
+        //console.log(noSSR)
+        // Update temporary connection if dragging during connection mode
+        /*if (isConnecting && connectionStart === nodeId) {
+          setTempConnection({
+            from: { x: x + 48, y: y + 48 },
+            to: tempConnection?.to || { x: x + 48, y: y + 48 },
+          })
+        }*/
       }
     },
     [isConnecting, connectionStart, tempConnection],
@@ -277,6 +289,7 @@ export default function SmartContractBuilder() {
   }
 
   useEffect(() => {
+    nodesRef.current = nodes
     if (!isConnecting || !connectionStart) return
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -331,6 +344,55 @@ export default function SmartContractBuilder() {
     }
   }, [nodes, selectedNode]);
 
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log(nodesRef.current, 'nodos')
+      sessionStorage.setItem('wallets', JSON.stringify(nodesRef.current))
+    }, 10000) // cada 10 segundos
+
+    return () => clearInterval(interval) // limpia el intervalo al desmontar
+  }, [])
+
+  ///este el use efect que se supone que debe consultar en la base de datos si tiene valor 
+  // si tiene valor monta el valor sino intenta montar el del session storage
+  useEffect(() => {
+    var Nodes = sessionStorage.getItem('wallets')
+    if (Nodes) {
+      setNodes(JSON.parse(Nodes))
+    }
+  }, [])
+
+  const simulate = useCallback(() => {
+    // Encuentra todos los nodos inválidos
+    const invalidNodes = nodes.filter(element => !element.valid);
+
+    if (invalidNodes.length > 0) {
+      // Aquí puedes mostrar un mensaje, marcar los nodos, etc.
+      alert(`Hay ${invalidNodes.length} nodos con billeteras inválidas.`);
+      return;
+    }else{
+        setValidNodes(true)
+        //llamar el metodo que simula el flujo de fondos
+    }
+
+
+  }, [nodes]);
+
+  async function checkExistencia(address: string) {
+  try {
+    const balance = await provider.getBalance(address)
+    const txCount = await provider.getTransactionCount(address)
+
+    const existe = !balance.isZero() || txCount > 0
+    console.log(`¿Existe?: ${existe}`)
+    return existe
+  } catch (err) {
+    console.error('Dirección inválida o error de red', err)
+    return false
+  }
+}
+
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Header */}
@@ -363,10 +425,21 @@ export default function SmartContractBuilder() {
             <Save className="w-4 h-4" />
             Guardar
           </Button>
-          <Button variant="outline" className="flex items-center gap-2">
+          <Button variant="outline" className="flex items-center gap-2"
+            onClick={simulate}
+          >
             <Play className="w-4 h-4" />
             Simular
           </Button>
+
+            {validNodes && (
+            <Button variant="outline" className="flex items-center gap-2"
+ 
+            >
+              <DollarSign className="w-4 h-4" />
+              Firmar
+            </Button>
+            )}
         </div>
       </div>
 
@@ -441,30 +514,30 @@ export default function SmartContractBuilder() {
                 {/* Nodos huérfanos */}
                 {nodes.filter((node) => node.parentId && !nodes.find((n) => n.children.includes(node.id))).length >
                   0 && (
-                  <div className="mt-4">
-                    <h4 className="text-sm font-medium text-gray-600 mb-2">Billeteras sin conexión</h4>
-                    {nodes
-                      .filter((node) => node.parentId && !nodes.find((n) => n.children.includes(node.id)))
-                      .map((orphanNode) => (
-                        <Card
-                          key={orphanNode.id}
-                          className={`p-3 cursor-pointer hover:bg-gray-50 border-dashed ${selectedNode?.id === orphanNode.id ? "ring-2 ring-blue-500" : ""}`}
-                          onClick={() => setSelectedNode(orphanNode)}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-3 h-3 rounded-full ${orphanNode.color}`} />
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm truncate">{orphanNode.name}</p>
-                              <p className="text-xs text-gray-500 truncate">{orphanNode.address}</p>
+                    <div className="mt-4">
+                      <h4 className="text-sm font-medium text-gray-600 mb-2">Billeteras sin conexión</h4>
+                      {nodes
+                        .filter((node) => node.parentId && !nodes.find((n) => n.children.includes(node.id)))
+                        .map((orphanNode) => (
+                          <Card
+                            key={orphanNode.id}
+                            className={`p-3 cursor-pointer hover:bg-gray-50 border-dashed ${selectedNode?.id === orphanNode.id ? "ring-2 ring-blue-500" : ""}`}
+                            onClick={() => setSelectedNode(orphanNode)}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-3 h-3 rounded-full ${orphanNode.color}`} />
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{orphanNode.name}</p>
+                                <p className="text-xs text-gray-500 truncate">{orphanNode.address}</p>
+                              </div>
+                              <Badge variant="outline" className="text-xs">
+                                {orphanNode.conditions.length}
+                              </Badge>
                             </div>
-                            <Badge variant="outline" className="text-xs">
-                              {orphanNode.conditions.length}
-                            </Badge>
-                          </div>
-                        </Card>
-                      ))}
-                  </div>
-                )}
+                          </Card>
+                        ))}
+                    </div>
+                  )}
               </div>
             </div>
 
@@ -509,61 +582,61 @@ export default function SmartContractBuilder() {
               {nodes.map((node) =>
                 node.children.map((childId) => {
                   let pathData = ""
-                  let midX=0, midY=0
-                  let startX=0, startY=0
+                  let midX = 0, midY = 0
+                  let startX = 0, startY = 0
                   const childNode = nodes.find((n) => n.id === childId)
                   if (!childNode) return null
                   //if (canvasRef.current) {
-                    //const rect = canvasRef.current.getBoundingClientRect()
-                    const startNode = nodes.find((n) => n.id === node.id)
-                    if (startNode) {
-                      // Calcular punto de salida más cercano al mouse
-                      const childX = childNode.x//- rect.left
-                      const childY = childNode.y //- rect.top
-                      const nodeCenterX = startNode.x + 48
-                      const nodeCenterY = startNode.y + 48
-                      const deltaX = childX - nodeCenterX
-                      const deltaY = childY - nodeCenterY
-                      const angle = Math.atan2(deltaY, deltaX)
-                      const absAngle = Math.abs(angle)
-            
-                      if (absAngle < Math.PI / 4) {
-                        startX = startNode.x + 96
-                        startY = nodeCenterY
-                      } else if (absAngle > (3 * Math.PI) / 4) {
-                        startX = startNode.x
-                        startY = nodeCenterY
-                      } else if (angle > 0) {
-                        startX = nodeCenterX
-                        startY = startNode.y + 96
-                      } else {
-                        startX = nodeCenterX
-                        startY = startNode.y
-                      }
-                      const nodeSize = 96
-                      const nodeRadius = nodeSize / 2
+                  //const rect = canvasRef.current.getBoundingClientRect()
+                  const startNode = nodes.find((n) => n.id === node.id)
+                  if (startNode) {
+                    // Calcular punto de salida más cercano al mouse
+                    const childX = childNode.x//- rect.left
+                    const childY = childNode.y //- rect.top
+                    const nodeCenterX = startNode.x + 48
+                    const nodeCenterY = startNode.y + 48
+                    const deltaX = childX - nodeCenterX
+                    const deltaY = childY - nodeCenterY
+                    const angle = Math.atan2(deltaY, deltaX)
+                    const absAngle = Math.abs(angle)
 
-                      const childCenterX = childNode.x + nodeRadius
-                      const childCenterY = childNode.y + nodeRadius
-
-                      const parentCenterX = node.x + nodeRadius
-                       const parentCenterY = node.y + nodeRadius
-                      
-                       const dx = childCenterX - parentCenterX
-                       const dy = childCenterY - parentCenterY
-                       const distance = Math.sqrt(dx * dx + dy * dy)
-
-                      const unitX = dx / distance
-                       const unitY = dy / distance
-                      const endX = childCenterX - unitX * nodeRadius
-                      const endY = childCenterY - unitY * nodeRadius
-
-                       midX = (startX + endX) / 2
-                       midY = (startY + endY) / 2
-                      
-                      pathData = `M ${startX} ${startY} L ${childX} ${childY}`
+                    if (absAngle < Math.PI / 4) {
+                      startX = startNode.x + 96
+                      startY = nodeCenterY
+                    } else if (absAngle > (3 * Math.PI) / 4) {
+                      startX = startNode.x
+                      startY = nodeCenterY
+                    } else if (angle > 0) {
+                      startX = nodeCenterX
+                      startY = startNode.y + 96
+                    } else {
+                      startX = nodeCenterX
+                      startY = startNode.y
                     }
-                 
+                    const nodeSize = 96
+                    const nodeRadius = nodeSize / 2
+
+                    const childCenterX = childNode.x + nodeRadius
+                    const childCenterY = childNode.y + nodeRadius
+
+                    const parentCenterX = node.x + nodeRadius
+                    const parentCenterY = node.y + nodeRadius
+
+                    const dx = childCenterX - parentCenterX
+                    const dy = childCenterY - parentCenterY
+                    const distance = Math.sqrt(dx * dx + dy * dy)
+
+                    const unitX = dx / distance
+                    const unitY = dy / distance
+                    const endX = childCenterX - unitX * nodeRadius
+                    const endY = childCenterY - unitY * nodeRadius
+
+                    midX = (startX + endX) / 2
+                    midY = (startY + endY) / 2
+
+                    pathData = `M ${startX} ${startY} L ${childX} ${childY}`
+                  }
+
 
                   return (
                     <g key={`${node.id}-${childId}`}>
@@ -690,13 +763,12 @@ export default function SmartContractBuilder() {
                 }}
               >
                 <Card
-                  className={`w-24 h-24 p-0 shadow-lg border-2 transition-colors ${
-                    isConnecting
-                      ? connectionStart === node.id
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-green-400 hover:border-green-500"
-                      : "hover:border-blue-400"
-                  }`}
+                  className={`w-24 h-24 p-0 shadow-lg border-2 transition-colors ${isConnecting
+                    ? connectionStart === node.id
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-green-400 hover:border-green-500"
+                    : "hover:border-blue-400"
+                    }`}
                 >
                   <CardContent className="p-2 h-full flex flex-col items-center justify-center relative">
                     <div className={`w-8 h-8 rounded-full ${node.color} flex items-center justify-center mb-1`}>
@@ -886,12 +958,12 @@ export default function SmartContractBuilder() {
                 <div className="flex items-center justify-between">
                   <Label className="text-base font-semibold">Condiciones</Label>
                   <Button onClick={() => {
-                  addCondition(selectedNode.id);
+                    addCondition(selectedNode.id);
 
-                }} size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Agregar Condición
-                </Button>
+                  }} size="sm">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Agregar Condición
+                  </Button>
                 </div>
 
                 {selectedNode.conditions.length === 0 ? (
