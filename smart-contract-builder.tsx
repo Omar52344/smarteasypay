@@ -14,9 +14,8 @@ import { Switch } from "@/components/ui/switch"
 import { Wallet, Plus, Settings, Copy, Trash2, Calendar, DollarSign, Clock, Save, Play } from "lucide-react"
 import { noSSR } from "next/dynamic"
 import { set } from "date-fns"
-import { ethers } from 'ethers'
-const provider = new ethers.providers.JsonRpcProvider();
-const address = '0x1234...abcd'
+//import { ethers } from 'ethers'
+
 
 interface Condition {
   idWallet?: string,
@@ -104,7 +103,8 @@ export default function SmartContractBuilder() {
     from: { x: number; y: number }
     to: { x: number; y: number }
   } | null>(null)
-
+  const [left, setLeft] = useState(320)
+  const [top, setTop] = useState(89)
   const addNode = useCallback(() => {
     const newNode: WalletNode = {
       id: crypto.randomUUID(),
@@ -252,28 +252,9 @@ export default function SmartContractBuilder() {
 
   const handleNodeDrag = useCallback(
     (nodeId: string, info: MouseEvent) => {
-
-      if (canvasRef.current) {
-        const rect = canvasRef.current.getBoundingClientRect()
-
-
-        const x = info.clientX - rect.left
-        const y = info.clientY - rect.top
-
-
-        //console.log(x,y,'metodo actualiza x y y')
-        // Forzar actualización inmediata
+        const x = info.clientX - left
+        const y = info.clientY - top
         setNodes((prevNodes) => prevNodes.map((node) => (node.id === nodeId ? { ...node, x, y } : node)))
-
-        //console.log(noSSR)
-        // Update temporary connection if dragging during connection mode
-        /*if (isConnecting && connectionStart === nodeId) {
-          setTempConnection({
-            from: { x: x + 48, y: y + 48 },
-            to: tempConnection?.to || { x: x + 48, y: y + 48 },
-          })
-        }*/
-      }
     },
     [isConnecting, connectionStart, tempConnection],
   )
@@ -293,13 +274,13 @@ export default function SmartContractBuilder() {
     if (!isConnecting || !connectionStart) return
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (canvasRef.current) {
-        const rect = canvasRef.current.getBoundingClientRect()
+      //if (canvasRef.current) {
+        //const rect = canvasRef.current.getBoundingClientRect()
         const startNode = nodes.find((n) => n.id === connectionStart)
         if (startNode) {
           // Calcular punto de salida más cercano al mouse
-          const mouseX = e.clientX - rect.left
-          const mouseY = e.clientY - rect.top
+          const mouseX = e.clientX - left
+          const mouseY = e.clientY - top
           const nodeCenterX = startNode.x + 48
           const nodeCenterY = startNode.y + 48
 
@@ -328,7 +309,7 @@ export default function SmartContractBuilder() {
             to: { x: mouseX, y: mouseY },
           })
         }
-      }
+      //}
     }
 
     document.addEventListener("mousemove", handleMouseMove)
@@ -379,7 +360,7 @@ export default function SmartContractBuilder() {
 
   }, [nodes]);
 
-  async function checkExistencia(address: string) {
+  /*async function checkExistencia(address: string) {
   try {
     const balance = await provider.getBalance(address)
     const txCount = await provider.getTransactionCount(address)
@@ -391,7 +372,7 @@ export default function SmartContractBuilder() {
     console.error('Dirección inválida o error de red', err)
     return false
   }
-}
+}*/
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
