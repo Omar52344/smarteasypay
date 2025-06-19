@@ -14,23 +14,24 @@ import { Switch } from "@/components/ui/switch"
 import { Wallet, Plus, Settings, Copy, Trash2, Calendar, DollarSign, Clock, Save, Play } from "lucide-react"
 import { noSSR } from "next/dynamic"
 import { set } from "date-fns"
+import { toast,Toaster } from "sonner"
 //import { ethers } from 'ethers'
 
 
 interface Condition {
   idWallet?: string,
-  order?: number,//posicion relativa de izquierda a derecha
+  //order?: number,//posicion relativa de izquierda a derecha
   id: string// id unico de la condicion
   type: "date" | "amount" | "expiration"//tipo de comparacion
   operator: "equals" | "greater" | "less" | "between" //operador
   value: string | number//valor condicion
   value2?: string | number//valor 2 de condicion
   label: string//nonbre de condicion
-  groupCondition?: number//grupo de la condicion para hacer agrupamiento anidad
+  //groupCondition?: number//grupo de la condicion para hacer agrupamiento anidad
   logic?: "AND" | "OR"//logic de la condicion
-  logicGroup?: "AND" | "OR"//logica del grupo de la condicion
-  nivelCondicion?: number
-
+  //logicGroup?: "AND" | "OR"//logica del grupo de la condicion
+  //nivelCondicion?: number
+  conditions?: Condition[]//condiciones anidadas
 }
 
 interface WalletNode {
@@ -92,6 +93,7 @@ export default function SmartContractBuilder() {
     },
   ])
   const nodesRef = useRef(nodes)
+  const [simulateActive, setSimulate] = useState(false)
   const [selectedNode, setSelectedNode] = useState<WalletNode | null>(null)
   const [isConfigOpen, setIsConfigOpen] = useState(false)
   const [draggedNode, setDraggedNode] = useState<string | null>(null)
@@ -328,7 +330,7 @@ export default function SmartContractBuilder() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      console.log(nodesRef.current, 'nodos')
+      //console.log(nodesRef.current, 'nodos')
       sessionStorage.setItem('wallets', JSON.stringify(nodesRef.current))
     }, 10000) // cada 10 segundos
 
@@ -350,14 +352,18 @@ export default function SmartContractBuilder() {
 
     if (invalidNodes.length > 0) {
       // Aquí puedes mostrar un mensaje, marcar los nodos, etc.
-      alert(`Hay ${invalidNodes.length} nodos con billeteras inválidas.`);
+      // ...
+      toast.error(`Hay ${invalidNodes.length} nodos con billeteras inválidas.`, {
+        description: "Por favor revisa las billeteras marcadas antes de continuar.",
+      })
+      //alert(`Hay ${invalidNodes.length} nodos con billeteras inválidas. Por favor revisa las billeteras marcadas antes de continuar.`)
+      setSimulate(true)
       return;
     }else{
         setValidNodes(true)
+        setSimulate(true)
         //llamar el metodo que simula el flujo de fondos
     }
-
-
   }, [nodes]);
 
   /*async function checkExistencia(address: string) {
@@ -377,6 +383,7 @@ export default function SmartContractBuilder() {
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Header */}
+       <Toaster richColors />
       <div className="bg-white border-b p-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Constructor de Contratos Inteligentes</h1>
@@ -784,9 +791,29 @@ export default function SmartContractBuilder() {
                         </div>
                       </div>
                     )}
+                     
+                    {node.valid ? (
+                      <div className="absolute top-1 left-1">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-500">
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="absolute top-1 left-1">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500">
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </span>
+                      </div>
+                    )}
 
                     {/* Existing condition indicators... */}
                     {node.conditions.length > 0 && (
+
+                      
                       <div className="absolute top-0 right-0 flex gap-1">
                         {node.conditions.slice(0, 3).map((condition, idx) => {
                           const Icon = getConditionIcon(condition.type)
@@ -913,6 +940,30 @@ export default function SmartContractBuilder() {
                   />
                 </div>
               </div>
+
+                <Separator />
+
+                {/* Botón Validar Billetera */}
+                <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                  // Validación simple: dirección empieza con '0x' y tiene longitud 42
+                  if (selectedNode?.address && selectedNode.address.startsWith('0x') && selectedNode.address.length === 42) {
+                    //aqui ira funcion de validacion con el api si es necesario
+                    updateNode(selectedNode.id, { valid: true });
+                    toast.success("Billetera válida");
+                  } else {
+                    updateNode(selectedNode.id, { valid: false });
+                    toast.error("Dirección de billetera inválida");
+                  }
+                  }}
+                >
+                  Validar Billetera
+                </Button>
+                </div>
+
+                {/* Color Selection */}
 
               <Separator />
 
@@ -1067,6 +1118,36 @@ export default function SmartContractBuilder() {
           )}
         </DialogContent>
       </Dialog>
+      <Dialog open={simulateActive} onOpenChange={setSimulate}>
+        {/*simulacion de costos */}
+      <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Simulacion de Contrato</DialogTitle>
+          </DialogHeader>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Costos de Gas</h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+              <div>
+                <p className="font-medium text-gray-900">Despliegue de Contrato</p>
+                <p className="text-sm text-gray-600">~$0.50 USD</p>
+              </div>
+              <span className="text-blue-600 font-semibold">$2,100 COP</span>
+            </div>
+            <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+              <div>
+                <p className="font-medium text-gray-900">Ejecución</p>
+                <p className="text-sm text-gray-600">~$0.01 USD</p>
+              </div>
+              <span className="text-green-600 font-semibold">$42 COP</span>
+            </div>
+            <div className="text-xs text-gray-500 mt-2">
+              * Precios en Optimism Testnet. Los costos se incluyen automáticamente en el contrato.
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
     </div>
   )
 }
