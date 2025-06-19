@@ -31,7 +31,7 @@ interface Condition {
   logic?: "AND" | "OR"//logic de la condicion
   //logicGroup?: "AND" | "OR"//logica del grupo de la condicion
   //nivelCondicion?: number
-  conditions?: Condition[]//condiciones anidadas
+  conditions: Condition[]//condiciones anidadas
 }
 
 interface WalletNode {
@@ -40,7 +40,7 @@ interface WalletNode {
   address: string
   x: number
   y: number
-  conditions: Condition[]
+  condition: Condition
   logic: "AND" | "OR"
   parentId?: string
   children: string[]
@@ -86,7 +86,14 @@ export default function SmartContractBuilder() {
       address: "0x1234...5678",
       x: 400,
       y: 100,
-      conditions: [],
+      condition: {
+        id: Date.now().toString(),
+        type: "date",
+        operator: "equals",
+        value: "",
+        label: "Nueva condición",
+        conditions: [],
+      },
       logic: "AND",
       children: [],
       color: "bg-purple-500",
@@ -114,7 +121,14 @@ export default function SmartContractBuilder() {
       address: `0x${Math.random().toString(16).substr(2, 8)}...${Math.random().toString(16).substr(2, 4)}`,
       x: 200 + Math.random() * 400,
       y: 200 + Math.random() * 200,
-      conditions: [],
+      condition:  {
+        id: Date.now().toString(),
+        type: "date",
+        operator: "equals",
+        value: "",
+        label: "Nueva condición",
+        conditions: [],
+      },
       logic: "AND",
       children: [],
       color: `bg-${["blue", "green", "red", "purple"][Math.floor(Math.random() * 4)]}-500`,
@@ -147,53 +161,78 @@ export default function SmartContractBuilder() {
     },
     [nodes],
   )
-  const addCondition = useCallback(
-    (nodeId: string) => {
-      const newCondition: Condition = {
-        id: Date.now().toString(),
-        type: "date",
-        operator: "equals",
-        value: "",
-        label: "Nueva condición",
-      };
-      setNodes((prevNodes) =>
-        prevNodes.map((node) =>
-          node.id === nodeId
-            ? { ...node, conditions: [...(node.conditions || []), newCondition] }
-            : node
-        )
-      );
-    },
-    [] // No necesitas nodes ni updateNode como dependencias
-  );
+const addCondition = useCallback(
+  (nodeId: string) => {
+    const newCondition: Condition = {
+      id: Date.now().toString(),
+      type: "date",
+      operator: "equals",
+      value: "",
+      label: "Nueva condición",
+      conditions: [],
+    };
 
-  const updateCondition = useCallback(
-    (nodeId: string, conditionId: string, updates: Partial<Condition>) => {
-      const node = nodes.find((n) => n.id === nodeId)
-      if (node) {
-        const updatedConditions = node.conditions.map((c) => (c.id === conditionId ? { ...c, ...updates } : c))
-        updateNode(nodeId, { conditions: updatedConditions })
+    setNodes((prevNodes) =>
+      prevNodes.map((node) =>
+        node.id === nodeId
+          ? {
+              ...node,
+              condition: {
+                ...node.condition,
+                conditions: [...(node.condition.conditions || []), newCondition],
+              },
+            }
+          : node
+      )
+    );
+  },
+  []
+);
+
+
+const updateCondition = useCallback(
+  (nodeId: string, conditionId: string, updates: Partial<Condition>) => {
+    const node = nodes.find((n) => n.id === nodeId);
+    if (node) {
+      const updatedCondition = updateConditionTree(node.condition, conditionId, updates);
+      updateNode(nodeId, { condition: updatedCondition });
+    }
+  },
+  [nodes, updateNode]
+);
+
+const removeCondition = useCallback(
+  (nodeId: string, conditionId: string) => {
+    const node = nodes.find((n) => n.id === nodeId);
+    if (node) {
+      const updatedCondition = removeConditionTree(node.condition, conditionId);
+      
+      // Solo actualiza si no se eliminó la raíz completa
+      if (updatedCondition) {
+        updateNode(nodeId, { condition: updatedCondition });
+      } else {
+        // Si la raíz fue eliminada (el id eliminado es el root), podrías decidir qué hacer
+        // Aquí un ejemplo asignando una condición vacía:
+        updateNode(nodeId, {
+          condition: {
+            id: crypto.randomUUID(),
+            type: 'amount',
+            operator: 'equals',
+            value: '',
+            label: '',
+            conditions: [],
+          },
+        });
       }
-    },
-    [nodes, updateNode],
-  )
+    }
+  },
+  [nodes, updateNode]
+);
 
-  const removeCondition = useCallback(
-    (nodeId: string, conditionId: string) => {
-      const node = nodes.find((n) => n.id === nodeId)
-      if (node) {
-        const updatedConditions = node.conditions.filter((c) => c.id !== conditionId)
-        updateNode(nodeId, { conditions: updatedConditions })
-      }
-    },
-    [nodes, updateNode],
-  )
-
-  const startConnection = useCallback((nodeId: string) => {
+ const startConnection = useCallback((nodeId: string) => {
     setConnectionStart(nodeId)
     setIsConnecting(true)
   }, [])
-
   const completeConnection = useCallback(
     (targetNodeId: string) => {
       if (connectionStart && connectionStart !== targetNodeId) {
@@ -379,6 +418,38 @@ export default function SmartContractBuilder() {
     return false
   }
 }*/
+function updateConditionTree(
+  condition: Condition,
+  conditionId: string,
+  updates: Partial<Condition>
+): Condition {
+  // Si esta condición es la que buscamos, la actualizamos
+  const updatedSelf = condition.id === conditionId
+    ? { ...condition, ...updates }
+    : condition;
+
+  // Luego actualizamos recursivamente las condiciones hijas
+  const updatedChildren = updatedSelf.conditions.map(child =>
+    updateConditionTree(child, conditionId, updates)
+  );
+
+  return { ...updatedSelf, conditions: updatedChildren };
+
+}
+
+function removeConditionTree(condition: Condition, conditionId: string): Condition | null {
+  // Si esta condición es la que se quiere eliminar, devolvemos null
+  if (condition.id === conditionId) {
+    return null;
+  }
+
+  // Filtrar y limpiar hijos
+  const filteredChildren = condition.conditions
+    .map(child => removeConditionTree(child, conditionId))
+    .filter(Boolean) as Condition[];
+
+  return { ...condition, conditions: filteredChildren };
+}
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -453,8 +524,14 @@ export default function SmartContractBuilder() {
                             <p className="text-xs text-gray-500 truncate">{rootNode.address}</p>
                           </div>
                           <Badge variant="secondary" className="text-xs">
-                            {rootNode.conditions.length}
+                            {
+                            rootNode.condition?.conditions.length
+                            //console.log(rootNode, 'condiciones')
+                            }
                           </Badge>
+                          {
+                            //console.log(rootNode, 'condiciones')
+                          }
                         </div>
                       </Card>
 
@@ -478,7 +555,7 @@ export default function SmartContractBuilder() {
                                   <p className="text-xs text-gray-500 truncate">{childNode.address}</p>
                                 </div>
                                 <Badge variant="secondary" className="text-xs">
-                                  {childNode.conditions.length}
+                                  {childNode.condition?.conditions.length}
                                 </Badge>
                                 <Button
                                   size="sm"
@@ -519,7 +596,7 @@ export default function SmartContractBuilder() {
                                 <p className="text-xs text-gray-500 truncate">{orphanNode.address}</p>
                               </div>
                               <Badge variant="outline" className="text-xs">
-                                {orphanNode.conditions.length}
+                                {orphanNode.condition?.conditions.length}
                               </Badge>
                             </div>
                           </Card>
@@ -811,11 +888,11 @@ export default function SmartContractBuilder() {
                     )}
 
                     {/* Existing condition indicators... */}
-                    {node.conditions.length > 0 && (
+                    {node.condition?.conditions.length > 0 && (
 
                       
                       <div className="absolute top-0 right-0 flex gap-1">
-                        {node.conditions.slice(0, 3).map((condition, idx) => {
+                        {node.condition?.conditions.slice(0, 3).map((condition, idx) => {
                           const Icon = getConditionIcon(condition.type)
                           return (
                             <div
@@ -826,7 +903,7 @@ export default function SmartContractBuilder() {
                             </div>
                           )
                         })}
-                        {node.conditions.length > 3 && (
+                        {node.condition?.conditions.length > 3 && (
                           <div className="w-4 h-4 rounded-full bg-gray-500 flex items-center justify-center">
                             <span className="text-xs text-white">+</span>
                           </div>
@@ -835,7 +912,7 @@ export default function SmartContractBuilder() {
                     )}
 
                     {/* Logic indicator */}
-                    {node.conditions.length > 1 && (
+                    {node.condition?.conditions.length > 1 && (
                       <div className="absolute bottom-0 left-0">
                         <Badge variant={node.logic === "AND" ? "default" : "secondary"} className="text-xs px-1 py-0">
                           {node.logic}
@@ -968,7 +1045,7 @@ export default function SmartContractBuilder() {
               <Separator />
 
               {/* Logic Type */}
-              {selectedNode.conditions.length >= 1 && (
+              {selectedNode.condition?.conditions.length >= 1 && (
                 <div className="space-y-2">
                   <Label>Lógica de Condiciones</Label>
                   <div className="flex items-center space-x-4">
@@ -998,14 +1075,14 @@ export default function SmartContractBuilder() {
                   </Button>
                 </div>
 
-                {selectedNode.conditions.length === 0 ? (
+                {selectedNode.condition.conditions.length === 0 ? (
                   <p className="text-gray-500 text-center py-8">
                     No hay condiciones configuradas. Agrega una condición para definir el comportamiento de esta
                     billetera.
                   </p>
                 ) : (
                   <div className="space-y-4">
-                    {selectedNode.conditions.map((condition, index) => (
+                    {selectedNode.condition?.conditions.map((condition, index) => (
                       <Card key={condition.id} className="p-4">
                         <div className="space-y-4">
                           <div className="flex items-center justify-between">
