@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
-import { Wallet, Plus, Settings, Copy, Trash2, Calendar, DollarSign, Clock, Save, Play } from "lucide-react"
+import { Wallet, Plus, Settings, Copy, Trash2, Calendar, DollarSign, Clock, Save, Play,ReceiptText } from "lucide-react"
 import { noSSR } from "next/dynamic"
 import { set } from "date-fns"
 import { toast,Toaster } from "sonner"
@@ -87,7 +87,7 @@ export default function SmartContractBuilder() {
       x: 400,
       y: 100,
       condition: {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         type: "date",
         operator: "equals",
         value: "",
@@ -107,6 +107,14 @@ export default function SmartContractBuilder() {
   const canvasRef = useRef<HTMLDivElement>(null)
   const [validNodes, setValidNodes] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
+  const [selectedCondition, setSelectedCondition] = useState<Condition>( {
+      id: Date.now().toString(),
+      type: "date",
+      operator: "equals",
+      value: "",
+      label: "Nueva condición",
+      conditions: [],
+    })
   const [connectionStart, setConnectionStart] = useState<string | null>(null)
   const [tempConnection, setTempConnection] = useState<{
     from: { x: number; y: number }
@@ -162,7 +170,7 @@ export default function SmartContractBuilder() {
     [nodes],
   )
 const addCondition = useCallback(
-  (nodeId: string) => {
+  (nodeId: string, conditionId: string) => {
     const newCondition: Condition = {
       id: Date.now().toString(),
       type: "date",
@@ -177,10 +185,7 @@ const addCondition = useCallback(
         node.id === nodeId
           ? {
               ...node,
-              condition: {
-                ...node.condition,
-                conditions: [...(node.condition.conditions || []), newCondition],
-              },
+              condition: addConditionToTree(node.condition, conditionId, newCondition),
             }
           : node
       )
@@ -189,6 +194,31 @@ const addCondition = useCallback(
   []
 );
 
+function addConditionToTree(
+  condition: Condition,
+  conditionId: string,
+  newCondition: Condition
+): Condition {
+  if (condition.id === conditionId) {
+    return {
+      ...condition,
+      conditions: [...condition.conditions, newCondition],
+    };
+  }
+
+  const updatedChildren = condition.conditions.map((child) =>
+    addConditionToTree(child, conditionId, newCondition)
+  );
+
+  return { ...condition, conditions: updatedChildren };
+}
+
+
+useEffect(() => {
+  if (selectedNode) {
+    setSelectedCondition(selectedNode.condition);
+  } 
+}, [selectedNode]);
 
 const updateCondition = useCallback(
   (nodeId: string, conditionId: string, updates: Partial<Condition>) => {
@@ -451,6 +481,17 @@ function removeConditionTree(condition: Condition, conditionId: string): Conditi
   return { ...condition, conditions: filteredChildren };
 }
 
+const selectChildrenCondition = (node: Condition)=> {
+  if (!node || !node.conditions) {
+    return []
+  }
+  //console.log(node, 'seleccionando hijos')
+  setSelectedCondition(node)
+ 
+}
+
+
+
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Header */}
@@ -515,7 +556,8 @@ function removeConditionTree(condition: Condition, conditionId: string): Conditi
                     <div key={rootNode.id} className="space-y-1">
                       <Card
                         className={`p-3 cursor-pointer hover:bg-gray-50 ${selectedNode?.id === rootNode.id ? "ring-2 ring-blue-500" : ""}`}
-                        onClick={() => setSelectedNode(rootNode)}
+                        onClick={() => setSelectedNode(rootNode)
+                        }
                       >
                         <div className="flex items-center gap-3">
                           <div className={`w-3 h-3 rounded-full ${rootNode.color}`} />
@@ -1045,7 +1087,7 @@ function removeConditionTree(condition: Condition, conditionId: string): Conditi
               <Separator />
 
               {/* Logic Type */}
-              {selectedNode.condition?.conditions.length >= 1 && (
+              { selectedCondition?.conditions?.length >= 1 && (
                 <div className="space-y-2">
                   <Label>Lógica de Condiciones</Label>
                   <div className="flex items-center space-x-4">
@@ -1067,7 +1109,7 @@ function removeConditionTree(condition: Condition, conditionId: string): Conditi
                 <div className="flex items-center justify-between">
                   <Label className="text-base font-semibold">Condiciones</Label>
                   <Button onClick={() => {
-                    addCondition(selectedNode.id);
+                    addCondition(selectedNode.id,selectedCondition.id);
 
                   }} size="sm">
                     <Plus className="w-4 h-4 mr-2" />
@@ -1075,18 +1117,29 @@ function removeConditionTree(condition: Condition, conditionId: string): Conditi
                   </Button>
                 </div>
 
-                {selectedNode.condition.conditions.length === 0 ? (
+                {selectedCondition?.conditions?.length === 0 ? (
                   <p className="text-gray-500 text-center py-8">
                     No hay condiciones configuradas. Agrega una condición para definir el comportamiento de esta
                     billetera.
                   </p>
                 ) : (
                   <div className="space-y-4">
-                    {selectedNode.condition?.conditions.map((condition, index) => (
+                    {selectedCondition?.conditions.map((condition, index) => (
                       <Card key={condition.id} className="p-4">
                         <div className="space-y-4">
                           <div className="flex items-center justify-between">
                             <Label className="font-medium">Condición {index + 1}</Label>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                selectChildrenCondition(condition);
+
+                              }}
+                            >
+                              <ReceiptText className="w-4 h-4" />
+                              Detalles Condición
+                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"
