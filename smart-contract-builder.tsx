@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
-import { Wallet, Plus, Settings, Copy, Trash2, Calendar, DollarSign, Clock, Save, Play,ReceiptText } from "lucide-react"
+import { Wallet, Plus, Settings, Copy, Trash2, Calendar, DollarSign, Clock, Save, Play,ReceiptText,ArrowLeft } from "lucide-react"
 import { noSSR } from "next/dynamic"
 import { set } from "date-fns"
 import { toast,Toaster } from "sonner"
@@ -31,7 +31,8 @@ interface Condition {
   logic?: "AND" | "OR"//logic de la condicion
   //logicGroup?: "AND" | "OR"//logica del grupo de la condicion
   //nivelCondicion?: number
-  conditions: Condition[]//condiciones anidadas
+  conditions: Condition[]//condiciones anidadas,
+  nivel: number//nivel de anidamiento de la condicion
 }
 
 interface WalletNode {
@@ -93,6 +94,7 @@ export default function SmartContractBuilder() {
         value: "",
         label: "Nueva condición",
         conditions: [],
+        nivel: 1
       },
       logic: "AND",
       children: [],
@@ -107,6 +109,7 @@ export default function SmartContractBuilder() {
   const canvasRef = useRef<HTMLDivElement>(null)
   const [validNodes, setValidNodes] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
+  const[isaddingCondition, setAddingCondition] = useState(false)
   const [selectedCondition, setSelectedCondition] = useState<Condition>( {
       id: Date.now().toString(),
       type: "date",
@@ -114,6 +117,7 @@ export default function SmartContractBuilder() {
       value: "",
       label: "Nueva condición",
       conditions: [],
+      nivel:1
     })
   const [connectionStart, setConnectionStart] = useState<string | null>(null)
   const [tempConnection, setTempConnection] = useState<{
@@ -136,6 +140,7 @@ export default function SmartContractBuilder() {
         value: "",
         label: "Nueva condición",
         conditions: [],
+        nivel:1
       },
       logic: "AND",
       children: [],
@@ -170,7 +175,7 @@ export default function SmartContractBuilder() {
     [nodes],
   )
 const addCondition = useCallback(
-  (nodeId: string, conditionId: string) => {
+  (nodeId: string, conditionId: string,conditionLevel:number) => {
     const newCondition: Condition = {
       id: Date.now().toString(),
       type: "date",
@@ -178,6 +183,7 @@ const addCondition = useCallback(
       value: "",
       label: "Nueva condición",
       conditions: [],
+      nivel: conditionLevel +1 // Incrementar el nivel de anidamiento
     };
 
     setNodes((prevNodes) =>
@@ -216,8 +222,8 @@ function addConditionToTree(
 
 useEffect(() => {
   if (selectedNode) {
-    setSelectedCondition(selectedNode.condition);
-  } 
+        setSelectedCondition(selectedNode.condition);
+  }
 }, [selectedNode]);
 
 const updateCondition = useCallback(
@@ -251,6 +257,7 @@ const removeCondition = useCallback(
             value: '',
             label: '',
             conditions: [],
+            nivel: 1, // Nivel inicial
           },
         });
       }
@@ -391,7 +398,7 @@ const removeCondition = useCallback(
     if (selectedNode) {
       const updatedNode = nodes.find((n) => n.id === selectedNode.id);
       if (updatedNode) {
-        setSelectedNode(updatedNode);
+          setSelectedNode(updatedNode);
       }
     }
   }, [nodes, selectedNode]);
@@ -481,14 +488,36 @@ function removeConditionTree(condition: Condition, conditionId: string): Conditi
   return { ...condition, conditions: filteredChildren };
 }
 
-const selectChildrenCondition = (node: Condition)=> {
-  if (!node || !node.conditions) {
+const selectChildrenCondition = (condition: Condition)=> {
+  if (!condition || !condition.conditions) {
     return []
   }
   //console.log(node, 'seleccionando hijos')
-  setSelectedCondition(node)
+  setSelectedCondition(condition)
+  
  
 }
+
+const selectParentCondition = (
+  root: Condition,
+  target: Condition,
+  setSelectedCondition: (condition: Condition) => void
+): boolean => {
+  for (const child of root.conditions) {
+    if (child.id === target.id) {
+
+      setSelectedCondition(root);
+
+      return true; // corta la recursión
+    }
+
+    const found = selectParentCondition(child, target, setSelectedCondition);
+    if (found) return true;
+  }
+
+  return false;
+};
+
 
 
 
@@ -1107,9 +1136,24 @@ const selectChildrenCondition = (node: Condition)=> {
               {/* Conditions */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Label className="text-base font-semibold">Condiciones</Label>
+                  <Label className="text-base font-semibold">Condiciones : Nivel {selectedCondition.nivel}</Label>
+                  {selectedCondition?.nivel > 1 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                selectParentCondition(
+                                  selectedNode.condition,
+                                  selectedCondition,
+                                  setSelectedCondition
+                                );
+                              }}
+                            >
+                              <ArrowLeft className="w-4 h-4" />
+                            </Button>
+                          )}
                   <Button onClick={() => {
-                    addCondition(selectedNode.id,selectedCondition.id);
+                    addCondition(selectedNode.id,selectedCondition.id,selectedCondition.nivel);
 
                   }} size="sm">
                     <Plus className="w-4 h-4 mr-2" />
@@ -1118,17 +1162,20 @@ const selectChildrenCondition = (node: Condition)=> {
                 </div>
 
                 {selectedCondition?.conditions?.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">
-                    No hay condiciones configuradas. Agrega una condición para definir el comportamiento de esta
-                    billetera.
-                  </p>
+                       <div>
+                          <p className="text-gray-500 text-center py-8">
+                            No hay condiciones configuradas. Agrega una condición para definir el comportamiento de esta
+                            billetera.
+                          </p>
+                          
+                        </div>
                 ) : (
                   <div className="space-y-4">
                     {selectedCondition?.conditions.map((condition, index) => (
                       <Card key={condition.id} className="p-4">
                         <div className="space-y-4">
                           <div className="flex items-center justify-between">
-                            <Label className="font-medium">Condición {index + 1}</Label>
+                            <Label className="font-medium">Condición {index + 1} </Label>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1140,6 +1187,7 @@ const selectChildrenCondition = (node: Condition)=> {
                               <ReceiptText className="w-4 h-4" />
                               Detalles Condición
                             </Button>
+                            
                             <Button
                               variant="ghost"
                               size="sm"
