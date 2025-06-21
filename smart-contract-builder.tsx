@@ -110,8 +110,9 @@ export default function SmartContractBuilder() {
   const [validNodes, setValidNodes] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const[isaddingCondition, setAddingCondition] = useState(false)
+  const [selectedConditionId, setSelectedConditionId] = useState<string | null>(null);
   const [selectedCondition, setSelectedCondition] = useState<Condition>( {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       type: "date",
       operator: "equals",
       value: "",
@@ -134,7 +135,7 @@ export default function SmartContractBuilder() {
       x: 200 + Math.random() * 400,
       y: 200 + Math.random() * 200,
       condition:  {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         type: "date",
         operator: "equals",
         value: "",
@@ -221,8 +222,13 @@ function addConditionToTree(
 
 
 useEffect(() => {
-  if (selectedNode) {
-        setSelectedCondition(selectedNode.condition);
+  if (selectedNode && selectedCondition) {
+    const refreshed = findConditionById(selectedNode.condition, selectedCondition.id);
+     setSelectedCondition(selectedNode.condition);
+    if (refreshed) {
+      
+      setSelectedCondition(refreshed);
+    }
   }
 }, [selectedNode]);
 
@@ -518,7 +524,19 @@ const selectParentCondition = (
   return false;
 };
 
+  function conditionExists(root: Condition, targetId: string): boolean {
+    if (root.id === targetId) return true;
+    return root.conditions.some(child => conditionExists(child, targetId));
+  }
 
+  function findConditionById(root: Condition, id: string): Condition | null {
+    if (root.id === id) return root;
+    for (const child of root.conditions) {
+      const found = findConditionById(child, id);
+      if (found) return found;
+    }
+    return null;
+  }
 
 
   return (
