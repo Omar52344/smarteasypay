@@ -11,12 +11,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
-import { Wallet, Plus, Settings, Copy, Trash2, Calendar, DollarSign, Clock, Save, Play,ReceiptText,ArrowLeft,CornerDownRight } from "lucide-react"
+import { Wallet, Plus, Settings, Copy, Trash2, Calendar, DollarSign, Clock, Save, Play,ReceiptText,ArrowLeft,CornerDownRight,Check } from "lucide-react"
 import { noSSR } from "next/dynamic"
 import { set } from "date-fns"
 import { toast,Toaster } from "sonner"
 //import { ethers } from 'ethers'
 
+interface ExitCondition {
+id: string // ID único de la condición de salida
+value:number
+order: number // Orden de la condición en el flujo
+walletId: string // ID de la billetera asociada a esta condición
+}
+  
 
 interface Condition {
   idWallet?: string,
@@ -33,6 +40,7 @@ interface Condition {
   //nivelCondicion?: number
   conditions: Condition[]//condiciones anidadas,
   nivel: number//nivel de anidamiento de la condicion
+  exitConditions: ExitCondition[]//condiciones de salida
 }
 
 interface WalletNode {
@@ -96,6 +104,12 @@ export default function SmartContractBuilder() {
         conditions: [],
         nivel: 1,
         logic: "AND",
+        exitConditions: [{
+          id: crypto.randomUUID(),
+          value: 0,
+          order: 1,
+          walletId: "", // ID de la billetera asociada
+        }],
       },
       children: [],
       color: "bg-purple-500",
@@ -103,14 +117,21 @@ export default function SmartContractBuilder() {
   ])
   const nodesRef = useRef(nodes)
   const [simulateActive, setSimulate] = useState(false)
-  const [selectedNode, setSelectedNode] = useState<WalletNode | null>(null)
+  const [selectedNode, setSelectedNode] = useState<WalletNode|null>(null)
   const [isConfigOpen, setIsConfigOpen] = useState(false)
-  const [draggedNode, setDraggedNode] = useState<string | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const [validNodes, setValidNodes] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
-  const[isaddingCondition, setAddingCondition] = useState(false)
-  const [selectedConditionId, setSelectedConditionId] = useState<string | null>(null);
+  const [isSelectingExit, setIsSelectingExit] = useState(false)
+  const[selectedExit, setSelectedExit] = useState<ExitCondition[]>(
+    [{
+      id: crypto.randomUUID(),
+      value: 0,
+      order: 1,
+      walletId: "", // ID de la billetera asociada
+    }],
+  )
+
   const [selectedCondition, setSelectedCondition] = useState<Condition>( {
       id: crypto.randomUUID(),
       type: "date",
@@ -120,6 +141,12 @@ export default function SmartContractBuilder() {
       conditions: [],
       nivel:1,
       logic: "AND",
+      exitConditions: [{
+          id: crypto.randomUUID(),
+          value: 0,
+          order: 1,
+          walletId: "", // ID de la billetera asociada
+        }],
     })
   const [connectionStart, setConnectionStart] = useState<string | null>(null)
   const [tempConnection, setTempConnection] = useState<{
@@ -144,6 +171,12 @@ export default function SmartContractBuilder() {
         conditions: [],
         nivel:1,
         logic: "AND",
+        exitConditions: [{
+          id: crypto.randomUUID(),
+          value: 0,
+          order: 1,
+          walletId: "", // ID de la billetera asociada
+        }],
       },
       children: [],
       color: `bg-${["blue", "green", "red", "purple"][Math.floor(Math.random() * 4)]}-500`,
@@ -187,6 +220,12 @@ const addCondition = useCallback(
       conditions: [],
       nivel: conditionLevel +1 ,// Incrementar el nivel de anidamiento
       logic: "AND", // Lógica por defecto
+      exitConditions: [{
+          id: crypto.randomUUID(),
+          value: 0,
+          order: 1,
+          walletId: "", // ID de la billetera asociada
+        }],
     };
 
     setNodes((prevNodes) =>
@@ -267,6 +306,12 @@ const removeCondition = useCallback(
             conditions: [],
             nivel: 1, // Nivel inicial
             logic: 'AND', // Lógica por defecto
+            exitConditions: [{
+            id: crypto.randomUUID(),
+            value: 0,
+            order: 1,
+            walletId: "", // ID de la billetera asociada
+          }],
           },
         });
       }
@@ -540,7 +585,41 @@ const selectParentCondition = (
     }
     return null;
   }
+function updateExitConditionsInTree(
+  root: Condition,
+  targetId: string,
+  newExitConditions: ExitCondition[]
+): Condition {
+  if (root.id === targetId) {
+    return {
+      ...root,
+      exitConditions: newExitConditions,
+    };
+  }
 
+  return {
+    ...root,
+    conditions: root.conditions.map((child) =>
+      updateExitConditionsInTree(child, targetId, newExitConditions)
+    ),
+  };
+}
+
+const updateExitConditions = useCallback(
+  (nodeId: string, conditionId: string, newExitConditions: ExitCondition[]) => {
+    setNodes((prevNodes) =>
+      prevNodes.map((node) =>
+        node.id === nodeId
+          ? {
+              ...node,
+              condition: updateExitConditionsInTree(node.condition, conditionId, newExitConditions),
+            }
+          : node
+      )
+    );
+  },
+  []
+);
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -1319,7 +1398,9 @@ const selectParentCondition = (
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                
+                 // Abrir diálogo para seleccionar condiciones de salida
+                setSelectedExit(selectedCondition.exitConditions);
+                setIsSelectingExit(true);
                 }}
               >
                   <CornerDownRight className="w-4 h-4" />
@@ -1360,6 +1441,163 @@ const selectParentCondition = (
         </div>
       </DialogContent>
     </Dialog>
+
+
+     <Dialog open={simulateActive} onOpenChange={setSimulate}>
+        {/*simulacion de costos */}
+      <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Simulacion de Contrato</DialogTitle>
+          </DialogHeader>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Costos de Gas</h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+              <div>
+                <p className="font-medium text-gray-900">Despliegue de Contrato</p>
+                <p className="text-sm text-gray-600">~$0.50 USD</p>
+              </div>
+              <span className="text-blue-600 font-semibold">$2,100 COP</span>
+            </div>
+            <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+              <div>
+                <p className="font-medium text-gray-900">Ejecución</p>
+                <p className="text-sm text-gray-600">~$0.01 USD</p>
+              </div>
+              <span className="text-green-600 font-semibold">$42 COP</span>
+            </div>
+            <div className="text-xs text-gray-500 mt-2">
+              * Precios en Optimism Testnet. Los costos se incluyen automáticamente en el contrato.
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+{/* Simulación de costos */}
+
+{/*condiciones de salida */}
+<Dialog open={isSelectingExit} onOpenChange={setIsSelectingExit}>
+  <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle>Condiciones de Salida</DialogTitle>
+    </DialogHeader>
+
+    <div className="flex justify-between items-center mb-4">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          setSelectedExit([
+            ...selectedExit,
+            {
+              id: crypto.randomUUID(),
+              value: 0,
+              order: selectedExit.length + 1,
+              walletId: "",
+            },
+          ]);
+        }}
+      >
+        <Plus className="w-4 h-4 mr-2" />
+        Agregar Condición de Salida
+      </Button>
+      <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (selectedNode && selectedCondition) {
+                updateExitConditions(selectedNode.id, selectedCondition.id, selectedExit);
+              }
+              setIsSelectingExit(false);
+            }}
+          >
+            <Check className="w-4 h-4 mr-2" />
+            Guardar Condiciones
+        </Button>
+    </div>
+
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      {selectedExit.map((exitCondition, index) => (
+        <div
+          key={exitCondition.id}
+          className="space-y-4 mb-4 border-b border-gray-200 pb-4"
+        >
+          <div className="flex items-center justify-between">
+            <Label className="font-medium">
+              Condición de Salida {index + 1}
+            </Label>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                setSelectedExit(
+                  selectedExit.filter((ec) => ec.id !== exitCondition.id)
+                )
+              }
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Valor</Label>
+              <Input
+                type="number"
+                value={exitCondition.value}
+                onChange={(e) => {
+                  const newValue = parseFloat(e.target.value);
+                  setSelectedExit(
+                    selectedExit.map((ec) =>
+                      ec.id === exitCondition.id
+                        ? { ...ec, value: newValue }
+                        : ec
+                    )
+                  );
+                }}
+              />
+            </div>
+            <div>
+              <Label>Orden</Label>
+              <Input
+                type="number"
+                value={exitCondition.order}
+                onChange={(e) => {
+                  const newOrder = parseInt(e.target.value);
+                  setSelectedExit(
+                    selectedExit.map((ec) =>
+                      ec.id === exitCondition.id
+                        ? { ...ec, order: newOrder }
+                        : ec
+                    )
+                  );
+                }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label>ID de Billetera</Label>
+            <Input
+              value={exitCondition.walletId}
+              onChange={(e) =>
+                setSelectedExit(
+                  selectedExit.map((ec) =>
+                    ec.id === exitCondition.id
+                      ? { ...ec, walletId: e.target.value }
+                      : ec
+                  )
+                )
+              }
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  </DialogContent>
+</Dialog>
+
+
     </div>
   )
 }
