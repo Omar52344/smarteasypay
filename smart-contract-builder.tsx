@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
-import { Wallet, Plus, Settings, Copy, Trash2, Calendar, DollarSign, Clock, Save, Play,ReceiptText,ArrowLeft } from "lucide-react"
+import { Wallet, Plus, Settings, Copy, Trash2, Calendar, DollarSign, Clock, Save, Play,ReceiptText,ArrowLeft,CornerDownRight } from "lucide-react"
 import { noSSR } from "next/dynamic"
 import { set } from "date-fns"
 import { toast,Toaster } from "sonner"
@@ -28,7 +28,7 @@ interface Condition {
   value2?: string | number//valor 2 de condicion
   label: string//nonbre de condicion
   //groupCondition?: number//grupo de la condicion para hacer agrupamiento anidad
-  logic?: "AND" | "OR"//logic de la condicion
+  logic: "AND" | "OR"//logic de la condicion
   //logicGroup?: "AND" | "OR"//logica del grupo de la condicion
   //nivelCondicion?: number
   conditions: Condition[]//condiciones anidadas,
@@ -42,7 +42,7 @@ interface WalletNode {
   x: number
   y: number
   condition: Condition
-  logic: "AND" | "OR"
+  //logic: "AND" | "OR"
   parentId?: string
   children: string[]
   color: string
@@ -94,9 +94,9 @@ export default function SmartContractBuilder() {
         value: "",
         label: "Nueva condición",
         conditions: [],
-        nivel: 1
+        nivel: 1,
+        logic: "AND",
       },
-      logic: "AND",
       children: [],
       color: "bg-purple-500",
     },
@@ -118,7 +118,8 @@ export default function SmartContractBuilder() {
       value: "",
       label: "Nueva condición",
       conditions: [],
-      nivel:1
+      nivel:1,
+      logic: "AND",
     })
   const [connectionStart, setConnectionStart] = useState<string | null>(null)
   const [tempConnection, setTempConnection] = useState<{
@@ -141,9 +142,9 @@ export default function SmartContractBuilder() {
         value: "",
         label: "Nueva condición",
         conditions: [],
-        nivel:1
+        nivel:1,
+        logic: "AND",
       },
-      logic: "AND",
       children: [],
       color: `bg-${["blue", "green", "red", "purple"][Math.floor(Math.random() * 4)]}-500`,
     }
@@ -184,7 +185,8 @@ const addCondition = useCallback(
       value: "",
       label: "Nueva condición",
       conditions: [],
-      nivel: conditionLevel +1 // Incrementar el nivel de anidamiento
+      nivel: conditionLevel +1 ,// Incrementar el nivel de anidamiento
+      logic: "AND", // Lógica por defecto
     };
 
     setNodes((prevNodes) =>
@@ -264,6 +266,7 @@ const removeCondition = useCallback(
             label: '',
             conditions: [],
             nivel: 1, // Nivel inicial
+            logic: 'AND', // Lógica por defecto
           },
         });
       }
@@ -698,17 +701,18 @@ const selectParentCondition = (
             <Separator />
 
             <div>
-              <h3 className="font-semibold mb-2">Tipos de Condiciones</h3>
+              <h3 className="font-semibold mb-2">Contratos</h3>
               <div className="space-y-2">
                 {conditionTypes.map((type) => {
                   const Icon = type.icon
                   return (
                     <div key={type.value} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
-                      <div className={`w-8 h-8 rounded-full ${type.color} flex items-center justify-center`}>
-                        <Icon className="w-4 h-4 text-white" />
-                      </div>
-                      <span className="text-sm font-medium">{type.label}</span>
+                      {/*<div className={`w-8 h-8 rounded-full ${type.color} flex items-center justify-center`}>*/}
+                        {/*<Icon className="w-4 h-4 text-white" />*/}
+                      {/*</div>*/}
+                      {/*<span className="text-sm font-medium">{type.label}</span>*/}
                     </div>
+                  
                   )
                 })}
               </div>
@@ -1001,13 +1005,13 @@ const selectParentCondition = (
                     )}
 
                     {/* Logic indicator */}
-                    {node.condition?.conditions.length > 1 && (
+                    {/*{node.condition?.conditions.length > 1 && (
                       <div className="absolute bottom-0 left-0">
                         <Badge variant={node.logic === "AND" ? "default" : "secondary"} className="text-xs px-1 py-0">
                           {node.logic}
                         </Badge>
                       </div>
-                    )}
+                    )}*/}
                   </CardContent>
                 </Card>
 
@@ -1140,11 +1144,12 @@ const selectParentCondition = (
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center space-x-2">
                       <Switch
-                        checked={selectedNode.logic === "AND"}
-                        onCheckedChange={(checked) => updateNode(selectedNode.id, { logic: checked ? "AND" : "OR" })}
+                        checked={selectedCondition.logic === "AND"}
+                        onCheckedChange={(checked) => updateCondition(selectedNode.id, selectedCondition.id, { logic: checked ? "AND" : "OR" })
+                      } 
                       />
                       <Label className="text-sm">
-                        {selectedNode.logic === "AND" ? "Todas las condiciones (AND)" : "Cualquier condición (OR)"}
+                        {selectedCondition.logic === "AND" ? "condiciones (AND)" : "condición (OR)"}
                       </Label>
                     </div>
                   </div>
@@ -1310,6 +1315,17 @@ const selectParentCondition = (
                   </div>
                 )}
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                
+                }}
+              >
+                  <CornerDownRight className="w-4 h-4" />
+                  Flujo Salida
+              </Button>
+
             </div>
           )}
         </DialogContent>
