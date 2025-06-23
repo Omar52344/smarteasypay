@@ -15,6 +15,7 @@ import { Wallet, Plus, Settings, Copy, Trash2, Calendar, DollarSign, Clock, Save
 import { noSSR } from "next/dynamic"
 import { set } from "date-fns"
 import { toast, Toaster } from "sonner"
+import { supabase } from "@/components/supabaseclient/supabaseclient"
 //import { ethers } from 'ethers'
 
 
@@ -24,8 +25,7 @@ interface Contract {
   id: string
   name: string // Nombre del contrato
   wallets: WalletNode[],
-  usuario?: string // Usuario que creó el contrato
-  fechaCreacion?: Date // Fecha de creación del contrato
+  user?: string // Usuario que creó el contrato
 }
 
 
@@ -127,7 +127,7 @@ export default function SmartContractBuilder() {
       color: "bg-purple-500",
     },
   ])
-  const [contract, setContract] = useState<Contract>({ id: crypto.randomUUID(), name: "contrato 1", wallets: nodes })
+  const [contract, setContract] = useState<Contract>({ id: crypto.randomUUID(), name: "Contrato 1", wallets: nodes })
   const [contracts, setContracts] = useState<Contract[]>(contract ? [contract] : [])
   const nodesRef = useRef(nodes)
   const contractsRef = useRef(contracts)
@@ -672,7 +672,64 @@ useEffect(() => {
     setNodes(newContract.wallets);
   };
 
+async function saveContract() {
+  if (!contract) {
+    toast.error("No hay contrato para guardar.");
+    return;
+  }
 
+  const { error } = await supabase
+    .from('contract')
+    .upsert(
+      {
+        id: contract.id, // Asegúrate de que el contrato tiene un ID válido
+        name: contract.name,
+        user: 'omarjaramillo8@gmail.com', // si usas auth, usa session.user.email
+        wallets: nodes,
+        created_at: new Date().toISOString()
+      },
+      {
+        onConflict: 'id' // Usa la columna 'id' como clave única
+      }
+    );
+
+  if (error) {
+    toast.error("Error al guardar el contrato.");
+    console.error(error);
+  } else {
+    toast.success("Contrato guardado correctamente.");
+  }
+}
+
+useEffect(() => {
+  const fetchContracts = async () => {
+    //if (!session?.user?.email) return;
+
+    const { data, error } = await supabase
+      .from('contract')
+      .select('*')
+      .eq('user', 'omarjaramillo8@gmail.com');
+
+    if (error) {
+      console.error('Error al obtener contratos:', error);
+      return;
+    }
+
+    if (data) {
+      console.table('Contratos obtenidos:', data);
+      const contratos: Contract[] = data.map((row) => ({
+        id: row.id,
+        name: row.name,
+        usuario: row.user,
+        fechaCreacion: row.created_at,
+        wallets: row.wallets
+      }));
+      setContracts(contratos);
+    }
+  };
+
+  fetchContracts();
+}, []);
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -703,7 +760,7 @@ useEffect(() => {
             </svg>
             {isConnecting ? "Cancelar Conexión" : "Conectar Billeteras"}
           </Button>
-          <Button variant="outline" className="flex items-center gap-2">
+          <Button variant="outline" className="flex items-center gap-2" onClick={() => saveContract()}>
             <Save className="w-4 h-4" />
             Guardar
           </Button>

@@ -9,7 +9,6 @@ export default function ContractsLayout({ children }: { children: React.ReactNod
   const { user, loading } = useSession() // asumimos que tienes un hook que da user y loading
 
   useEffect(() => {
-    debugger
     if (!loading && !user) {
       router.push('/Login') // redirige al login si no está autenticado
     }
