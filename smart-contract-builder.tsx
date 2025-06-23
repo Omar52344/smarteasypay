@@ -471,12 +471,36 @@ export default function SmartContractBuilder() {
     }
   }, [nodes, selectedNode]);
 
+useEffect(() => {
+  
+}, [nodes]);
 
 useEffect(() => {
+
   if (initialized) {
     sessionStorage.setItem("contracts", JSON.stringify(contracts));
   }
 }, [contracts, initialized]);
+
+useEffect(() => {
+  if (contract) {
+    // Actualizar el contrato actual con los nuevos nodos
+    const updatedContract: Contract = {
+      ...contract,
+      wallets: nodes,
+    };
+
+    // Guardar el contrato actualizado
+    setContract(updatedContract);
+
+    // Reemplazar el contrato dentro del arreglo de contratos
+    setContracts((prevContracts) =>
+      prevContracts.map((c) =>
+        c.id === updatedContract.id ? updatedContract : c
+      )
+    );
+  }
+}, [nodes]);
 
   ///este el use efect que se supone que debe consultar en la base de datos si tiene valor 
   // si tiene valor monta el valor sino intenta montar el del session storage
