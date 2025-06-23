@@ -1,3 +1,6 @@
+
+"use client"
+
 import React, { useState, FormEvent, ChangeEvent } from 'react';
 
 // Definición de interfaces para los tipos

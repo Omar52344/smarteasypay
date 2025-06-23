@@ -23,7 +23,9 @@ import { toast, Toaster } from "sonner"
 interface Contract {
   id: string
   name: string // Nombre del contrato
-  wallets: WalletNode[]
+  wallets: WalletNode[],
+  usuario?: string // Usuario que creó el contrato
+  fechaCreacion?: Date // Fecha de creación del contrato
 }
 
 

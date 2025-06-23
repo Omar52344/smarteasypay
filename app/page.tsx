@@ -1,6 +1,6 @@
 "use client"
 
-import SmartContractBuilder from "../smart-contract-builder"
+import SmartContractBuilder from "./Contracts/page"
 
 export default function Page() {
   return <SmartContractBuilder />

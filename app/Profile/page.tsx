@@ -1,4 +1,7 @@
-import React, { useState, FormEvent } from 'react';
+
+"use client"
+
+import React, { useState, FormEvent, use } from 'react';
 
 // Definición de interfaces para los tipos de datos
 interface Notifications {

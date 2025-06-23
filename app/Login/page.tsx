@@ -1,3 +1,6 @@
+
+"use client"
+
 import React, { useState, FormEvent } from 'react';
 
 // Definición de tipos para las props
@@ -92,7 +95,7 @@ const AuthLogin: React.FC<AuthLoginProps> = ({ onLogin, onSwitchToRegister }) =>
           <div className="flex-1 border-t border-gray-300"></div>
         </div>
 
-        <button
+        {/*<button
           onClick={connectMetaMask}
           disabled={isConnectingWallet}
           className="w-full bg-orange-500 text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors flex items-center justify-center space-x-2"
@@ -102,17 +105,17 @@ const AuthLogin: React.FC<AuthLoginProps> = ({ onLogin, onSwitchToRegister }) =>
             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
           </svg>
           <span>{isConnectingWallet ? 'Conectando...' : 'Conectar MetaMask'}</span>
-        </button>
+        </button>*/}
 
         <div className="text-center mt-6">
           <p className="text-gray-600">
             ¿No tienes cuenta?{' '}
-            <button
-              onClick={onSwitchToRegister}
+            <a
+              href="/Register"
               className="text-blue-600 hover:text-blue-700 font-medium"
             >
               Regístrate aquí
-            </button>
+            </a>
           </p>
         </div>
       </div>
