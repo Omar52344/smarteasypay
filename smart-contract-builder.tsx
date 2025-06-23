@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useCallback, useEffect } from "react"
+import { useState, useRef, useCallback, useEffect, use } from "react"
 import { motion, PanInfo } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -11,19 +11,29 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
-import { Wallet, Plus, Settings, Copy, Trash2, Calendar, DollarSign, Clock, Save, Play,ReceiptText,ArrowLeft,CornerDownRight,Check } from "lucide-react"
+import { Wallet, Plus, Settings, Copy, Trash2, Calendar, DollarSign, Clock, Save, Play, ReceiptText, ArrowLeft, CornerDownRight, Check } from "lucide-react"
 import { noSSR } from "next/dynamic"
 import { set } from "date-fns"
-import { toast,Toaster } from "sonner"
+import { toast, Toaster } from "sonner"
 //import { ethers } from 'ethers'
 
-interface ExitCondition {
-id: string // ID único de la condición de salida
-value:number
-order: number // Orden de la condición en el flujo
-walletId: string // ID de la billetera asociada a esta condición
+
+
+
+interface Contract {
+  id: string
+  name: string // Nombre del contrato
+  wallets: WalletNode[]
 }
-  
+
+
+interface ExitCondition {
+  id: string // ID único de la condición de salida
+  value: number
+  order: number // Orden de la condición en el flujo
+  walletId: string // ID de la billetera asociada a esta condición
+}
+
 
 interface Condition {
   idWallet?: string,
@@ -115,15 +125,19 @@ export default function SmartContractBuilder() {
       color: "bg-purple-500",
     },
   ])
+  const [contract, setContract] = useState<Contract>({ id: crypto.randomUUID(), name: "contrato 1", wallets: nodes })
+  const [contracts, setContracts] = useState<Contract[]>(contract ? [contract] : [])
   const nodesRef = useRef(nodes)
+  const contractsRef = useRef(contracts)
   const [simulateActive, setSimulate] = useState(false)
-  const [selectedNode, setSelectedNode] = useState<WalletNode|null>(null)
+  const [selectedNode, setSelectedNode] = useState<WalletNode | null>(null)
   const [isConfigOpen, setIsConfigOpen] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
   const [validNodes, setValidNodes] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [isSelectingExit, setIsSelectingExit] = useState(false)
-  const[selectedExit, setSelectedExit] = useState<ExitCondition[]>(
+  const [initialized, setInitialized] = useState(false); 
+  const [selectedExit, setSelectedExit] = useState<ExitCondition[]>(
     [{
       id: crypto.randomUUID(),
       value: 0,
@@ -132,22 +146,22 @@ export default function SmartContractBuilder() {
     }],
   )
 
-  const [selectedCondition, setSelectedCondition] = useState<Condition>( {
+  const [selectedCondition, setSelectedCondition] = useState<Condition>({
+    id: crypto.randomUUID(),
+    type: "date",
+    operator: "equals",
+    value: "",
+    label: "Nueva condición",
+    conditions: [],
+    nivel: 1,
+    logic: "AND",
+    exitConditions: [{
       id: crypto.randomUUID(),
-      type: "date",
-      operator: "equals",
-      value: "",
-      label: "Nueva condición",
-      conditions: [],
-      nivel:1,
-      logic: "AND",
-      exitConditions: [{
-          id: crypto.randomUUID(),
-          value: 0,
-          order: 1,
-          walletId: "", // ID de la billetera asociada
-        }],
-    })
+      value: 0,
+      order: 1,
+      walletId: "", // ID de la billetera asociada
+    }],
+  })
   const [connectionStart, setConnectionStart] = useState<string | null>(null)
   const [tempConnection, setTempConnection] = useState<{
     from: { x: number; y: number }
@@ -162,14 +176,14 @@ export default function SmartContractBuilder() {
       address: `0x${Math.random().toString(16).substr(2, 8)}...${Math.random().toString(16).substr(2, 4)}`,
       x: 200 + Math.random() * 400,
       y: 200 + Math.random() * 200,
-      condition:  {
+      condition: {
         id: crypto.randomUUID(),
         type: "date",
         operator: "equals",
         value: "",
         label: "Nueva condición",
         conditions: [],
-        nivel:1,
+        nivel: 1,
         logic: "AND",
         exitConditions: [{
           id: crypto.randomUUID(),
@@ -209,118 +223,118 @@ export default function SmartContractBuilder() {
     },
     [nodes],
   )
-const addCondition = useCallback(
-  (nodeId: string, conditionId: string,conditionLevel:number) => {
-    const newCondition: Condition = {
-      id: Date.now().toString(),
-      type: "date",
-      operator: "equals",
-      value: "",
-      label: "Nueva condición",
-      conditions: [],
-      nivel: conditionLevel +1 ,// Incrementar el nivel de anidamiento
-      logic: "AND", // Lógica por defecto
-      exitConditions: [{
+  const addCondition = useCallback(
+    (nodeId: string, conditionId: string, conditionLevel: number) => {
+      const newCondition: Condition = {
+        id: Date.now().toString(),
+        type: "date",
+        operator: "equals",
+        value: "",
+        label: "Nueva condición",
+        conditions: [],
+        nivel: conditionLevel + 1,// Incrementar el nivel de anidamiento
+        logic: "AND", // Lógica por defecto
+        exitConditions: [{
           id: crypto.randomUUID(),
           value: 0,
           order: 1,
           walletId: "", // ID de la billetera asociada
         }],
-    };
+      };
 
-    setNodes((prevNodes) =>
-      prevNodes.map((node) =>
-        node.id === nodeId
-          ? {
+      setNodes((prevNodes) =>
+        prevNodes.map((node) =>
+          node.id === nodeId
+            ? {
               ...node,
               condition: addConditionToTree(node.condition, conditionId, newCondition),
             }
-          : node
-      )
-    );
-  },
-  []
-);
-
-function addConditionToTree(
-  condition: Condition,
-  conditionId: string,
-  newCondition: Condition
-): Condition {
-  if (condition.id === conditionId) {
-    return {
-      ...condition,
-      conditions: [...condition.conditions, newCondition],
-    };
-  }
-
-  const updatedChildren = condition.conditions.map((child) =>
-    addConditionToTree(child, conditionId, newCondition)
+            : node
+        )
+      );
+    },
+    []
   );
 
-  return { ...condition, conditions: updatedChildren };
-}
-
-
-useEffect(() => {
-  if (selectedNode && selectedCondition) {
-    const refreshed = findConditionById(selectedNode.condition, selectedCondition.id);
-     setSelectedCondition(selectedNode.condition);
-    if (refreshed) {
-      
-      setSelectedCondition(refreshed);
+  function addConditionToTree(
+    condition: Condition,
+    conditionId: string,
+    newCondition: Condition
+  ): Condition {
+    if (condition.id === conditionId) {
+      return {
+        ...condition,
+        conditions: [...condition.conditions, newCondition],
+      };
     }
+
+    const updatedChildren = condition.conditions.map((child) =>
+      addConditionToTree(child, conditionId, newCondition)
+    );
+
+    return { ...condition, conditions: updatedChildren };
   }
-}, [selectedNode]);
 
-const updateCondition = useCallback(
-  (nodeId: string, conditionId: string, updates: Partial<Condition>) => {
-    const node = nodes.find((n) => n.id === nodeId);
-    if (node) {
-      const updatedCondition = updateConditionTree(node.condition, conditionId, updates);
-      updateNode(nodeId, { condition: updatedCondition });
-    }
-  },
-  [nodes, updateNode]
-);
 
-const removeCondition = useCallback(
-  (nodeId: string, conditionId: string) => {
-    const node = nodes.find((n) => n.id === nodeId);
-    if (node) {
-      const updatedCondition = removeConditionTree(node.condition, conditionId);
-      
-      // Solo actualiza si no se eliminó la raíz completa
-      if (updatedCondition) {
-        updateNode(nodeId, { condition: updatedCondition });
-      } else {
-        // Si la raíz fue eliminada (el id eliminado es el root), podrías decidir qué hacer
-        // Aquí un ejemplo asignando una condición vacía:
-        updateNode(nodeId, {
-          condition: {
-            id: crypto.randomUUID(),
-            type: 'amount',
-            operator: 'equals',
-            value: '',
-            label: '',
-            conditions: [],
-            nivel: 1, // Nivel inicial
-            logic: 'AND', // Lógica por defecto
-            exitConditions: [{
-            id: crypto.randomUUID(),
-            value: 0,
-            order: 1,
-            walletId: "", // ID de la billetera asociada
-          }],
-          },
-        });
+  useEffect(() => {
+    if (selectedNode && selectedCondition) {
+      const refreshed = findConditionById(selectedNode.condition, selectedCondition.id);
+      setSelectedCondition(selectedNode.condition);
+      if (refreshed) {
+
+        setSelectedCondition(refreshed);
       }
     }
-  },
-  [nodes, updateNode]
-);
+  }, [selectedNode]);
 
- const startConnection = useCallback((nodeId: string) => {
+  const updateCondition = useCallback(
+    (nodeId: string, conditionId: string, updates: Partial<Condition>) => {
+      const node = nodes.find((n) => n.id === nodeId);
+      if (node) {
+        const updatedCondition = updateConditionTree(node.condition, conditionId, updates);
+        updateNode(nodeId, { condition: updatedCondition });
+      }
+    },
+    [nodes, updateNode]
+  );
+
+  const removeCondition = useCallback(
+    (nodeId: string, conditionId: string) => {
+      const node = nodes.find((n) => n.id === nodeId);
+      if (node) {
+        const updatedCondition = removeConditionTree(node.condition, conditionId);
+
+        // Solo actualiza si no se eliminó la raíz completa
+        if (updatedCondition) {
+          updateNode(nodeId, { condition: updatedCondition });
+        } else {
+          // Si la raíz fue eliminada (el id eliminado es el root), podrías decidir qué hacer
+          // Aquí un ejemplo asignando una condición vacía:
+          updateNode(nodeId, {
+            condition: {
+              id: crypto.randomUUID(),
+              type: 'amount',
+              operator: 'equals',
+              value: '',
+              label: '',
+              conditions: [],
+              nivel: 1, // Nivel inicial
+              logic: 'AND', // Lógica por defecto
+              exitConditions: [{
+                id: crypto.randomUUID(),
+                value: 0,
+                order: 1,
+                walletId: "", // ID de la billetera asociada
+              }],
+            },
+          });
+        }
+      }
+    },
+    [nodes, updateNode]
+  );
+
+  const startConnection = useCallback((nodeId: string) => {
     setConnectionStart(nodeId)
     setIsConnecting(true)
   }, [])
@@ -384,9 +398,9 @@ const removeCondition = useCallback(
 
   const handleNodeDrag = useCallback(
     (nodeId: string, info: MouseEvent) => {
-        const x = info.clientX - left
-        const y = info.clientY - top
-        setNodes((prevNodes) => prevNodes.map((node) => (node.id === nodeId ? { ...node, x, y } : node)))
+      const x = info.clientX - left
+      const y = info.clientY - top
+      setNodes((prevNodes) => prevNodes.map((node) => (node.id === nodeId ? { ...node, x, y } : node)))
     },
     [isConnecting, connectionStart, tempConnection],
   )
@@ -407,40 +421,40 @@ const removeCondition = useCallback(
 
     const handleMouseMove = (e: MouseEvent) => {
       //if (canvasRef.current) {
-        //const rect = canvasRef.current.getBoundingClientRect()
-        const startNode = nodes.find((n) => n.id === connectionStart)
-        if (startNode) {
-          // Calcular punto de salida más cercano al mouse
-          const mouseX = e.clientX - left
-          const mouseY = e.clientY - top
-          const nodeCenterX = startNode.x + 48
-          const nodeCenterY = startNode.y + 48
+      //const rect = canvasRef.current.getBoundingClientRect()
+      const startNode = nodes.find((n) => n.id === connectionStart)
+      if (startNode) {
+        // Calcular punto de salida más cercano al mouse
+        const mouseX = e.clientX - left
+        const mouseY = e.clientY - top
+        const nodeCenterX = startNode.x + 48
+        const nodeCenterY = startNode.y + 48
 
-          let startX, startY
-          const deltaX = mouseX - nodeCenterX
-          const deltaY = mouseY - nodeCenterY
-          const angle = Math.atan2(deltaY, deltaX)
-          const absAngle = Math.abs(angle)
+        let startX, startY
+        const deltaX = mouseX - nodeCenterX
+        const deltaY = mouseY - nodeCenterY
+        const angle = Math.atan2(deltaY, deltaX)
+        const absAngle = Math.abs(angle)
 
-          if (absAngle < Math.PI / 4) {
-            startX = startNode.x + 96
-            startY = nodeCenterY
-          } else if (absAngle > (3 * Math.PI) / 4) {
-            startX = startNode.x
-            startY = nodeCenterY
-          } else if (angle > 0) {
-            startX = nodeCenterX
-            startY = startNode.y + 96
-          } else {
-            startX = nodeCenterX
-            startY = startNode.y
-          }
-          //console.log(mouseX,mouseY,'mouse posicion')
-          setTempConnection({
-            from: { x: startX, y: startY },
-            to: { x: mouseX, y: mouseY },
-          })
+        if (absAngle < Math.PI / 4) {
+          startX = startNode.x + 96
+          startY = nodeCenterY
+        } else if (absAngle > (3 * Math.PI) / 4) {
+          startX = startNode.x
+          startY = nodeCenterY
+        } else if (angle > 0) {
+          startX = nodeCenterX
+          startY = startNode.y + 96
+        } else {
+          startX = nodeCenterX
+          startY = startNode.y
         }
+        //console.log(mouseX,mouseY,'mouse posicion')
+        setTempConnection({
+          from: { x: startX, y: startY },
+          to: { x: mouseX, y: mouseY },
+        })
+      }
       //}
     }
 
@@ -452,29 +466,28 @@ const removeCondition = useCallback(
     if (selectedNode) {
       const updatedNode = nodes.find((n) => n.id === selectedNode.id);
       if (updatedNode) {
-          setSelectedNode(updatedNode);
+        setSelectedNode(updatedNode);
       }
     }
   }, [nodes, selectedNode]);
 
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      //console.log(nodesRef.current, 'nodos')
-      sessionStorage.setItem('wallets', JSON.stringify(nodesRef.current))
-    }, 10000) // cada 10 segundos
-
-    return () => clearInterval(interval) // limpia el intervalo al desmontar
-  }, [])
+useEffect(() => {
+  if (initialized) {
+    sessionStorage.setItem("contracts", JSON.stringify(contracts));
+  }
+}, [contracts, initialized]);
 
   ///este el use efect que se supone que debe consultar en la base de datos si tiene valor 
   // si tiene valor monta el valor sino intenta montar el del session storage
-  useEffect(() => {
-    var Nodes = sessionStorage.getItem('wallets')
-    if (Nodes) {
-      setNodes(JSON.parse(Nodes))
-    }
-  }, [])
+useEffect(() => {
+  const stored = sessionStorage.getItem("contracts");
+  if (stored) {
+    const parsed = JSON.parse(stored) as Contract[];
+    setContracts(parsed);
+  }
+  setInitialized(true); // ← señal de que ya cargamos los datos
+}, []);
 
   const simulate = useCallback(() => {
     // Encuentra todos los nodos inválidos
@@ -489,10 +502,10 @@ const removeCondition = useCallback(
       //alert(`Hay ${invalidNodes.length} nodos con billeteras inválidas. Por favor revisa las billeteras marcadas antes de continuar.`)
       setSimulate(true)
       return;
-    }else{
-        setValidNodes(true)
-        setSimulate(true)
-        //llamar el metodo que simula el flujo de fondos
+    } else {
+      setValidNodes(true)
+      setSimulate(true)
+      //llamar el metodo que simula el flujo de fondos
     }
   }, [nodes]);
 
@@ -509,68 +522,68 @@ const removeCondition = useCallback(
     return false
   }
 }*/
-function updateConditionTree(
-  condition: Condition,
-  conditionId: string,
-  updates: Partial<Condition>
-): Condition {
-  // Si esta condición es la que buscamos, la actualizamos
-  const updatedSelf = condition.id === conditionId
-    ? { ...condition, ...updates }
-    : condition;
+  function updateConditionTree(
+    condition: Condition,
+    conditionId: string,
+    updates: Partial<Condition>
+  ): Condition {
+    // Si esta condición es la que buscamos, la actualizamos
+    const updatedSelf = condition.id === conditionId
+      ? { ...condition, ...updates }
+      : condition;
 
-  // Luego actualizamos recursivamente las condiciones hijas
-  const updatedChildren = updatedSelf.conditions.map(child =>
-    updateConditionTree(child, conditionId, updates)
-  );
+    // Luego actualizamos recursivamente las condiciones hijas
+    const updatedChildren = updatedSelf.conditions.map(child =>
+      updateConditionTree(child, conditionId, updates)
+    );
 
-  return { ...updatedSelf, conditions: updatedChildren };
+    return { ...updatedSelf, conditions: updatedChildren };
 
-}
-
-function removeConditionTree(condition: Condition, conditionId: string): Condition | null {
-  // Si esta condición es la que se quiere eliminar, devolvemos null
-  if (condition.id === conditionId) {
-    return null;
   }
 
-  // Filtrar y limpiar hijos
-  const filteredChildren = condition.conditions
-    .map(child => removeConditionTree(child, conditionId))
-    .filter(Boolean) as Condition[];
-
-  return { ...condition, conditions: filteredChildren };
-}
-
-const selectChildrenCondition = (condition: Condition)=> {
-  if (!condition || !condition.conditions) {
-    return []
-  }
-  //console.log(node, 'seleccionando hijos')
-  setSelectedCondition(condition)
-  
- 
-}
-
-const selectParentCondition = (
-  root: Condition,
-  target: Condition,
-  setSelectedCondition: (condition: Condition) => void
-): boolean => {
-  for (const child of root.conditions) {
-    if (child.id === target.id) {
-
-      setSelectedCondition(root);
-
-      return true; // corta la recursión
+  function removeConditionTree(condition: Condition, conditionId: string): Condition | null {
+    // Si esta condición es la que se quiere eliminar, devolvemos null
+    if (condition.id === conditionId) {
+      return null;
     }
 
-    const found = selectParentCondition(child, target, setSelectedCondition);
-    if (found) return true;
+    // Filtrar y limpiar hijos
+    const filteredChildren = condition.conditions
+      .map(child => removeConditionTree(child, conditionId))
+      .filter(Boolean) as Condition[];
+
+    return { ...condition, conditions: filteredChildren };
   }
 
-  return false;
-};
+  const selectChildrenCondition = (condition: Condition) => {
+    if (!condition || !condition.conditions) {
+      return []
+    }
+    //console.log(node, 'seleccionando hijos')
+    setSelectedCondition(condition)
+
+
+  }
+
+  const selectParentCondition = (
+    root: Condition,
+    target: Condition,
+    setSelectedCondition: (condition: Condition) => void
+  ): boolean => {
+    for (const child of root.conditions) {
+      if (child.id === target.id) {
+
+        setSelectedCondition(root);
+
+        return true; // corta la recursión
+      }
+
+      const found = selectParentCondition(child, target, setSelectedCondition);
+      if (found) return true;
+    }
+
+    return false;
+  };
 
   function conditionExists(root: Condition, targetId: string): boolean {
     if (root.id === targetId) return true;
@@ -585,46 +598,60 @@ const selectParentCondition = (
     }
     return null;
   }
-function updateExitConditionsInTree(
-  root: Condition,
-  targetId: string,
-  newExitConditions: ExitCondition[]
-): Condition {
-  if (root.id === targetId) {
+  function updateExitConditionsInTree(
+    root: Condition,
+    targetId: string,
+    newExitConditions: ExitCondition[]
+  ): Condition {
+    if (root.id === targetId) {
+      return {
+        ...root,
+        exitConditions: newExitConditions,
+      };
+    }
+
     return {
       ...root,
-      exitConditions: newExitConditions,
+      conditions: root.conditions.map((child) =>
+        updateExitConditionsInTree(child, targetId, newExitConditions)
+      ),
     };
   }
 
-  return {
-    ...root,
-    conditions: root.conditions.map((child) =>
-      updateExitConditionsInTree(child, targetId, newExitConditions)
-    ),
-  };
-}
-
-const updateExitConditions = useCallback(
-  (nodeId: string, conditionId: string, newExitConditions: ExitCondition[]) => {
-    setNodes((prevNodes) =>
-      prevNodes.map((node) =>
-        node.id === nodeId
-          ? {
+  const updateExitConditions = useCallback(
+    (nodeId: string, conditionId: string, newExitConditions: ExitCondition[]) => {
+      setNodes((prevNodes) =>
+        prevNodes.map((node) =>
+          node.id === nodeId
+            ? {
               ...node,
               condition: updateExitConditionsInTree(node.condition, conditionId, newExitConditions),
             }
-          : node
-      )
-    );
-  },
-  []
-);
+            : node
+        )
+      );
+    },
+    []
+  );
+
+  const switchContract = (newContract: Contract) => {
+    if (contract) {
+      setContracts((prev) =>
+        prev.map((c) =>
+          c.id === contract.id ? { ...contract, wallets: nodes } : c
+        )
+      );
+    }
+    setContract(newContract);
+    setNodes(newContract.wallets);
+  };
+
+
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Header */}
-       <Toaster richColors />
+      <Toaster richColors />
       <div className="bg-white border-b p-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Constructor de Contratos Inteligentes</h1>
@@ -661,14 +688,14 @@ const updateExitConditions = useCallback(
             Simular
           </Button>
 
-            {validNodes && (
+          {validNodes && (
             <Button variant="outline" className="flex items-center gap-2"
- 
+
             >
               <DollarSign className="w-4 h-4" />
               Firmar
             </Button>
-            )}
+          )}
         </div>
       </div>
 
@@ -696,8 +723,8 @@ const updateExitConditions = useCallback(
                           </div>
                           <Badge variant="secondary" className="text-xs">
                             {
-                            rootNode.condition?.conditions.length
-                            //console.log(rootNode, 'condiciones')
+                              rootNode.condition?.conditions.length
+                              //console.log(rootNode, 'condiciones')
                             }
                           </Badge>
                           {
@@ -780,22 +807,90 @@ const updateExitConditions = useCallback(
             <Separator />
 
             <div>
-              <h3 className="font-semibold mb-2">Contratos</h3>
-              <div className="space-y-2">
-                {conditionTypes.map((type) => {
-                  const Icon = type.icon
-                  return (
-                    <div key={type.value} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
-                      {/*<div className={`w-8 h-8 rounded-full ${type.color} flex items-center justify-center`}>*/}
-                        {/*<Icon className="w-4 h-4 text-white" />*/}
-                      {/*</div>*/}
-                      {/*<span className="text-sm font-medium">{type.label}</span>*/}
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => {
+                  const initialNodes: WalletNode[] = [
+                    {
+                      id: crypto.randomUUID(),
+                      name: "Billetera Principal",
+                      address: "0x1234...5678",
+                      x: 400,
+                      y: 100,
+                      condition: {
+                        id: crypto.randomUUID(),
+                        type: "date",
+                        operator: "equals",
+                        value: "",
+                        label: "Nueva condición",
+                        conditions: [],
+                        nivel: 1,
+                        logic: "AND",
+                        exitConditions: [
+                          {
+                            id: crypto.randomUUID(),
+                            value: 0,
+                            order: 1,
+                            walletId: "",
+                          },
+                        ],
+                      },
+                      children: [],
+                      color: "bg-purple-500",
+                    },
+                  ];
+
+                  const newContract: Contract = {
+                    id: crypto.randomUUID(),
+                    name: `Contrato ${contracts.length + 1}`,
+                    wallets: initialNodes,
+                  };
+
+                  // Guardar el contrato actual (si existe) antes de agregar el nuevo
+                  setContracts((prevContracts) => {
+                    const updatedContracts = contract
+                      ? prevContracts.map((c) =>
+                        c.id === contract.id ? { ...c, wallets: nodes } : c
+                      )
+                      : prevContracts;
+
+                    return [...updatedContracts, newContract];
+                  });
+
+                  setContract(newContract);
+                  setNodes(initialNodes);
+                }}
+                >
+                + Nuevo Contrato
+                </Button>
+
+                <div className="mt-4" />
+
+                <h3 className="font-semibold mb-2">Contratos</h3>
+                <div className="space-y-2">
+                {contracts.map((element) => (
+                  <Card
+                    key={element.id}
+                    className={`p-3 cursor-pointer hover:bg-gray-50 ${contract?.id === element.id ? "ring-2 ring-blue-500" : ""
+                      }`}
+                    onClick={() => switchContract(element)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full bg-blue-500" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{element.name}</p>
+                        {/*<p className="text-xs text-gray-500 truncate">ID: {element.id}</p>*/}
+                      </div>
+                      <Badge variant="secondary" className="text-xs">
+                        {element.wallets.length} nodos
+                      </Badge>
                     </div>
-                  
-                  )
-                })}
+                  </Card>
+                ))}
               </div>
             </div>
+
           </div>
         </div>
 
@@ -1040,7 +1135,7 @@ const updateExitConditions = useCallback(
                         </div>
                       </div>
                     )}
-                     
+
                     {node.valid ? (
                       <div className="absolute top-1 left-1">
                         <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-500">
@@ -1062,7 +1157,7 @@ const updateExitConditions = useCallback(
                     {/* Existing condition indicators... */}
                     {node.condition?.conditions.length > 0 && (
 
-                      
+
                       <div className="absolute top-0 right-0 flex gap-1">
                         {node.condition?.conditions.slice(0, 3).map((condition, idx) => {
                           const Icon = getConditionIcon(condition.type)
@@ -1190,34 +1285,34 @@ const updateExitConditions = useCallback(
                 </div>
               </div>
 
-                <Separator />
+              <Separator />
 
-                {/* Botón Validar Billetera */}
-                <div className="flex justify-end">
+              {/* Botón Validar Billetera */}
+              <div className="flex justify-end">
                 <Button
                   variant="outline"
                   onClick={async () => {
-                  // Validación simple: dirección empieza con '0x' y tiene longitud 42
-                  if (selectedNode?.address && selectedNode.address.startsWith('0x') && selectedNode.address.length === 42) {
-                    //aqui ira funcion de validacion con el api si es necesario
-                    updateNode(selectedNode.id, { valid: true });
-                    toast.success("Billetera válida");
-                  } else {
-                    updateNode(selectedNode.id, { valid: false });
-                    toast.error("Dirección de billetera inválida");
-                  }
+                    // Validación simple: dirección empieza con '0x' y tiene longitud 42
+                    if (selectedNode?.address && selectedNode.address.startsWith('0x') && selectedNode.address.length === 42) {
+                      //aqui ira funcion de validacion con el api si es necesario
+                      updateNode(selectedNode.id, { valid: true });
+                      toast.success("Billetera válida");
+                    } else {
+                      updateNode(selectedNode.id, { valid: false });
+                      toast.error("Dirección de billetera inválida");
+                    }
                   }}
                 >
                   Validar Billetera
                 </Button>
-                </div>
+              </div>
 
-                {/* Color Selection */}
+              {/* Color Selection */}
 
               <Separator />
 
               {/* Logic Type */}
-              { selectedCondition?.conditions?.length >= 1 && (
+              {selectedCondition?.conditions?.length >= 1 && (
                 <div className="space-y-2">
                   <Label>Lógica de Condiciones</Label>
                   <div className="flex items-center space-x-4">
@@ -1225,7 +1320,7 @@ const updateExitConditions = useCallback(
                       <Switch
                         checked={selectedCondition.logic === "AND"}
                         onCheckedChange={(checked) => updateCondition(selectedNode.id, selectedCondition.id, { logic: checked ? "AND" : "OR" })
-                      } 
+                        }
                       />
                       <Label className="text-sm">
                         {selectedCondition.logic === "AND" ? "condiciones (AND)" : "condición (OR)"}
@@ -1240,22 +1335,22 @@ const updateExitConditions = useCallback(
                 <div className="flex items-center justify-between">
                   <Label className="text-base font-semibold">Condiciones : Nivel {selectedCondition.nivel}</Label>
                   {selectedCondition?.nivel > 1 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                selectParentCondition(
-                                  selectedNode.condition,
-                                  selectedCondition,
-                                  setSelectedCondition
-                                );
-                              }}
-                            >
-                              <ArrowLeft className="w-4 h-4" />
-                            </Button>
-                          )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        selectParentCondition(
+                          selectedNode.condition,
+                          selectedCondition,
+                          setSelectedCondition
+                        );
+                      }}
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </Button>
+                  )}
                   <Button onClick={() => {
-                    addCondition(selectedNode.id,selectedCondition.id,selectedCondition.nivel);
+                    addCondition(selectedNode.id, selectedCondition.id, selectedCondition.nivel);
 
                   }} size="sm">
                     <Plus className="w-4 h-4 mr-2" />
@@ -1264,13 +1359,13 @@ const updateExitConditions = useCallback(
                 </div>
 
                 {selectedCondition?.conditions?.length === 0 ? (
-                       <div>
-                          <p className="text-gray-500 text-center py-8">
-                            No hay condiciones configuradas. Agrega una condición para definir el comportamiento de esta
-                            billetera.
-                          </p>
-                          
-                        </div>
+                  <div>
+                    <p className="text-gray-500 text-center py-8">
+                      No hay condiciones configuradas. Agrega una condición para definir el comportamiento de esta
+                      billetera.
+                    </p>
+
+                  </div>
                 ) : (
                   <div className="space-y-4">
                     {selectedCondition?.conditions.map((condition, index) => (
@@ -1289,7 +1384,7 @@ const updateExitConditions = useCallback(
                               <ReceiptText className="w-4 h-4" />
                               Detalles Condición
                             </Button>
-                            
+
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1398,13 +1493,13 @@ const updateExitConditions = useCallback(
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                 // Abrir diálogo para seleccionar condiciones de salida
-                setSelectedExit(selectedCondition.exitConditions);
-                setIsSelectingExit(true);
+                  // Abrir diálogo para seleccionar condiciones de salida
+                  setSelectedExit(selectedCondition.exitConditions);
+                  setIsSelectingExit(true);
                 }}
               >
-                  <CornerDownRight className="w-4 h-4" />
-                  Flujo Salida
+                <CornerDownRight className="w-4 h-4" />
+                Flujo Salida
               </Button>
 
             </div>
@@ -1413,189 +1508,189 @@ const updateExitConditions = useCallback(
       </Dialog>
       <Dialog open={simulateActive} onOpenChange={setSimulate}>
         {/*simulacion de costos */}
-      <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Simulacion de Contrato</DialogTitle>
           </DialogHeader>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Costos de Gas</h3>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-              <div>
-                <p className="font-medium text-gray-900">Despliegue de Contrato</p>
-                <p className="text-sm text-gray-600">~$0.50 USD</p>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Costos de Gas</h3>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">Despliegue de Contrato</p>
+                  <p className="text-sm text-gray-600">~$0.50 USD</p>
+                </div>
+                <span className="text-blue-600 font-semibold">$2,100 COP</span>
               </div>
-              <span className="text-blue-600 font-semibold">$2,100 COP</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-              <div>
-                <p className="font-medium text-gray-900">Ejecución</p>
-                <p className="text-sm text-gray-600">~$0.01 USD</p>
+              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">Ejecución</p>
+                  <p className="text-sm text-gray-600">~$0.01 USD</p>
+                </div>
+                <span className="text-green-600 font-semibold">$42 COP</span>
               </div>
-              <span className="text-green-600 font-semibold">$42 COP</span>
-            </div>
-            <div className="text-xs text-gray-500 mt-2">
-              * Precios en Optimism Testnet. Los costos se incluyen automáticamente en el contrato.
+              <div className="text-xs text-gray-500 mt-2">
+                * Precios en Optimism Testnet. Los costos se incluyen automáticamente en el contrato.
+              </div>
             </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
 
 
-     <Dialog open={simulateActive} onOpenChange={setSimulate}>
+      <Dialog open={simulateActive} onOpenChange={setSimulate}>
         {/*simulacion de costos */}
-      <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Simulacion de Contrato</DialogTitle>
           </DialogHeader>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Costos de Gas</h3>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-              <div>
-                <p className="font-medium text-gray-900">Despliegue de Contrato</p>
-                <p className="text-sm text-gray-600">~$0.50 USD</p>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Costos de Gas</h3>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">Despliegue de Contrato</p>
+                  <p className="text-sm text-gray-600">~$0.50 USD</p>
+                </div>
+                <span className="text-blue-600 font-semibold">$2,100 COP</span>
               </div>
-              <span className="text-blue-600 font-semibold">$2,100 COP</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-              <div>
-                <p className="font-medium text-gray-900">Ejecución</p>
-                <p className="text-sm text-gray-600">~$0.01 USD</p>
+              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">Ejecución</p>
+                  <p className="text-sm text-gray-600">~$0.01 USD</p>
+                </div>
+                <span className="text-green-600 font-semibold">$42 COP</span>
               </div>
-              <span className="text-green-600 font-semibold">$42 COP</span>
-            </div>
-            <div className="text-xs text-gray-500 mt-2">
-              * Precios en Optimism Testnet. Los costos se incluyen automáticamente en el contrato.
+              <div className="text-xs text-gray-500 mt-2">
+                * Precios en Optimism Testnet. Los costos se incluyen automáticamente en el contrato.
+              </div>
             </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-{/* Simulación de costos */}
+        </DialogContent>
+      </Dialog>
+      {/* Simulación de costos */}
 
-{/*condiciones de salida */}
-<Dialog open={isSelectingExit} onOpenChange={setIsSelectingExit}>
-  <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-    <DialogHeader>
-      <DialogTitle>Condiciones de Salida</DialogTitle>
-    </DialogHeader>
+      {/*condiciones de salida */}
+      <Dialog open={isSelectingExit} onOpenChange={setIsSelectingExit}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Condiciones de Salida</DialogTitle>
+          </DialogHeader>
 
-    <div className="flex justify-between items-center mb-4">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          setSelectedExit([
-            ...selectedExit,
-            {
-              id: crypto.randomUUID(),
-              value: 0,
-              order: selectedExit.length + 1,
-              walletId: "",
-            },
-          ]);
-        }}
-      >
-        <Plus className="w-4 h-4 mr-2" />
-        Agregar Condición de Salida
-      </Button>
-      <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (selectedNode && selectedCondition) {
-                updateExitConditions(selectedNode.id, selectedCondition.id, selectedExit);
-              }
-              setIsSelectingExit(false);
-            }}
-          >
-            <Check className="w-4 h-4 mr-2" />
-            Guardar Condiciones
-        </Button>
-    </div>
-
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      {selectedExit.map((exitCondition, index) => (
-        <div
-          key={exitCondition.id}
-          className="space-y-4 mb-4 border-b border-gray-200 pb-4"
-        >
-          <div className="flex items-center justify-between">
-            <Label className="font-medium">
-              Condición de Salida {index + 1}
-            </Label>
+          <div className="flex justify-between items-center mb-4">
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              onClick={() =>
-                setSelectedExit(
-                  selectedExit.filter((ec) => ec.id !== exitCondition.id)
-                )
-              }
+              onClick={() => {
+                setSelectedExit([
+                  ...selectedExit,
+                  {
+                    id: crypto.randomUUID(),
+                    value: 0,
+                    order: selectedExit.length + 1,
+                    walletId: "",
+                  },
+                ]);
+              }}
             >
-              <Trash2 className="w-4 h-4" />
+              <Plus className="w-4 h-4 mr-2" />
+              Agregar Condición de Salida
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (selectedNode && selectedCondition) {
+                  updateExitConditions(selectedNode.id, selectedCondition.id, selectedExit);
+                }
+                setIsSelectingExit(false);
+              }}
+            >
+              <Check className="w-4 h-4 mr-2" />
+              Guardar Condiciones
             </Button>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Valor</Label>
-              <Input
-                type="number"
-                value={exitCondition.value}
-                onChange={(e) => {
-                  const newValue = parseFloat(e.target.value);
-                  setSelectedExit(
-                    selectedExit.map((ec) =>
-                      ec.id === exitCondition.id
-                        ? { ...ec, value: newValue }
-                        : ec
-                    )
-                  );
-                }}
-              />
-            </div>
-            <div>
-              <Label>Orden</Label>
-              <Input
-                type="number"
-                value={exitCondition.order}
-                onChange={(e) => {
-                  const newOrder = parseInt(e.target.value);
-                  setSelectedExit(
-                    selectedExit.map((ec) =>
-                      ec.id === exitCondition.id
-                        ? { ...ec, order: newOrder }
-                        : ec
-                    )
-                  );
-                }}
-              />
-            </div>
-          </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            {selectedExit.map((exitCondition, index) => (
+              <div
+                key={exitCondition.id}
+                className="space-y-4 mb-4 border-b border-gray-200 pb-4"
+              >
+                <div className="flex items-center justify-between">
+                  <Label className="font-medium">
+                    Condición de Salida {index + 1}
+                  </Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setSelectedExit(
+                        selectedExit.filter((ec) => ec.id !== exitCondition.id)
+                      )
+                    }
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
 
-          <div>
-            <Label>ID de Billetera</Label>
-            <Input
-              value={exitCondition.walletId}
-              onChange={(e) =>
-                setSelectedExit(
-                  selectedExit.map((ec) =>
-                    ec.id === exitCondition.id
-                      ? { ...ec, walletId: e.target.value }
-                      : ec
-                  )
-                )
-              }
-            />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Valor</Label>
+                    <Input
+                      type="number"
+                      value={exitCondition.value}
+                      onChange={(e) => {
+                        const newValue = parseFloat(e.target.value);
+                        setSelectedExit(
+                          selectedExit.map((ec) =>
+                            ec.id === exitCondition.id
+                              ? { ...ec, value: newValue }
+                              : ec
+                          )
+                        );
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <Label>Orden</Label>
+                    <Input
+                      type="number"
+                      value={exitCondition.order}
+                      onChange={(e) => {
+                        const newOrder = parseInt(e.target.value);
+                        setSelectedExit(
+                          selectedExit.map((ec) =>
+                            ec.id === exitCondition.id
+                              ? { ...ec, order: newOrder }
+                              : ec
+                          )
+                        );
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label>ID de Billetera</Label>
+                  <Input
+                    value={exitCondition.walletId}
+                    onChange={(e) =>
+                      setSelectedExit(
+                        selectedExit.map((ec) =>
+                          ec.id === exitCondition.id
+                            ? { ...ec, walletId: e.target.value }
+                            : ec
+                        )
+                      )
+                    }
+                  />
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
-      ))}
-    </div>
-  </DialogContent>
-</Dialog>
+        </DialogContent>
+      </Dialog>
 
 
     </div>
