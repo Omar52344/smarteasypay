@@ -2,7 +2,10 @@
 "use client"
 
 import React, { useState, FormEvent } from 'react';
-
+import { useRouter } from 'next/navigation';// Asegúrate de tener react-router-dom instalado
+import bcrypt from 'bcryptjs';
+import { toast,Toaster } from 'sonner'; // o el sistema de notificaciones que uses
+import { supabase } from  "@/components/supabaseclient/supabaseclient" // o tu instancia ya creada
 // Definición de tipos para las props
 interface AuthLoginProps {
   onLogin: (data: { email?: string; wallet?: string; type: 'email' | 'wallet' }) => void;
@@ -20,13 +23,39 @@ const AuthLogin: React.FC<AuthLoginProps> = ({ onLogin, onSwitchToRegister }) =>
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [isConnectingWallet, setIsConnectingWallet] = useState<boolean>(false);
+  const router = useRouter();
 
-  const handleLogin = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (email && password) {
-      onLogin({ email, type: 'email' });
-    }
-  };
+const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+
+  if (!email || !password) {
+    toast.error('Por favor ingresa tu email y contraseña');
+    return;
+  }
+
+  // Buscar usuario por email
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('email', email)
+    .single();
+
+  if (error || !data) {
+    toast.error('Usuario no encontrado');
+    return;
+  }
+
+  // Comparar contraseñas
+  const isValidPassword = await bcrypt.compare(password, data.password);
+
+  if (!isValidPassword) {
+    toast.error('Contraseña incorrecta');
+    return;
+  }
+    sessionStorage.setItem('user', JSON.stringify(data));
+    router.push('/Contracts');
+  
+};
 
   const connectMetaMask = async () => {
     setIsConnectingWallet(true);
@@ -44,8 +73,12 @@ const AuthLogin: React.FC<AuthLoginProps> = ({ onLogin, onSwitchToRegister }) =>
     setIsConnectingWallet(false);
   };
 
+
+  
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <Toaster richColors />
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">SmartPayEasy</h1>

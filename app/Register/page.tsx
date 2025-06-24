@@ -2,7 +2,9 @@
 "use client"
 
 import React, { useState, FormEvent, ChangeEvent } from 'react';
-
+import { supabase } from "@/components/supabaseclient/supabaseclient"
+import { toast, Toaster } from "sonner"
+import bcrypt from 'bcryptjs';
 // Definición de interfaces para los tipos
 interface FormDataType {
   name: string;
@@ -18,7 +20,7 @@ interface AuthRegisterProps {
   onSwitchToLogin: () => void;
 }
 
-const AuthRegister: React.FC<AuthRegisterProps> = ({ onRegister, onSwitchToLogin }) => {
+const AuthRegister: React.FC<AuthRegisterProps> = ({  onSwitchToLogin }) => {
   const [formData, setFormData] = useState<FormDataType>({
     name: '',
     email: '',
@@ -44,8 +46,54 @@ const AuthRegister: React.FC<AuthRegisterProps> = ({ onRegister, onSwitchToLogin
     onRegister(formData);
   };
 
+async function onRegister(data: FormDataType) {
+  try {
+    // Verificar si ya existe un usuario con ese email
+    const { data: existingUsers, error: fetchError } = await supabase
+      .from('users') // Asegúrate que el nombre de tu tabla sea correcto
+      .select('id')
+      .eq('email', data.email);
+
+    if (fetchError) {
+      console.error('Error al consultar usuario:', fetchError.message);
+      toast.error("Error al consultar el usuario.");
+      return;
+    }
+
+    if (existingUsers && existingUsers.length > 0) {
+      toast.error("El correo ya está registrado.");
+      return;
+    }
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    // Si no existe, insertar nuevo usuario
+    const { error: insertError } = await supabase
+      .from('users')
+      .insert([{
+        name: data.name,
+        email: data.email,
+        empresa: data.company,
+        whatsapp: data.phone,
+        password: hashedPassword, // ⚠️ Solo si estás en desarrollo. Nunca almacenes contraseñas en texto plano.
+        created_at: new Date().toISOString(),
+      }]);
+
+    if (insertError) {
+      console.error('Error al insertar:', insertError.message);
+      toast.error("Error al registrar el usuario.");
+      return;
+    }
+
+    toast.success("Registro exitoso.");
+  } catch (err) {
+    console.error('Error inesperado:', err);
+    toast.error("Error inesperado al registrar.");
+  }
+}
+
   return (
+    
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <Toaster richColors />
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Crear Cuenta</h1>
@@ -154,12 +202,12 @@ const AuthRegister: React.FC<AuthRegisterProps> = ({ onRegister, onSwitchToLogin
         <div className="text-center mt-6">
           <p className="text-gray-600">
             ¿Ya tienes cuenta?{' '}
-            <button
-              onClick={onSwitchToLogin}
+            <a
+              href="/Login"
               className="text-blue-600 hover:text-blue-700 font-medium"
             >
-              Inicia sesión
-            </button>
+              Inicia Sesión
+            </a>
           </p>
         </div>
       </div>
