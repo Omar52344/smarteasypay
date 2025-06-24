@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';// Asegúrate de tener react-router-
 import bcrypt from 'bcryptjs';
 import { toast,Toaster } from 'sonner'; // o el sistema de notificaciones que uses
 import { supabase } from  "@/components/supabaseclient/supabaseclient" // o tu instancia ya creada
+import { useSessionContext } from '@/hooks/SessionContext'; // Asegúrate de que esta ruta sea correcta
 // Definición de tipos para las props
 interface AuthLoginProps {
   onLogin: (data: { email?: string; wallet?: string; type: 'email' | 'wallet' }) => void;
@@ -24,7 +25,7 @@ const AuthLogin: React.FC<AuthLoginProps> = ({ onLogin, onSwitchToRegister }) =>
   const [password, setPassword] = useState<string>('');
   const [isConnectingWallet, setIsConnectingWallet] = useState<boolean>(false);
   const router = useRouter();
-
+ const { login } = useSessionContext();
 const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
   e.preventDefault();
 
@@ -53,6 +54,9 @@ const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     return;
   }
     sessionStorage.setItem('user', JSON.stringify(data));
+    
+
+    login({ name: data.name, email: data.email });
     router.push('/Contracts');
   
 };

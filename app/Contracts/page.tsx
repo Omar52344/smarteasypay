@@ -17,7 +17,7 @@ import { set } from "date-fns"
 import { toast, Toaster } from "sonner"
 import { supabase } from "@/components/supabaseclient/supabaseclient"
 //import { ethers } from 'ethers'
-
+import { useSessionContext } from '@/hooks/SessionContext';
 
 
 
@@ -139,6 +139,7 @@ export default function SmartContractBuilder() {
   const [isConnecting, setIsConnecting] = useState(false)
   const [isSelectingExit, setIsSelectingExit] = useState(false)
   const [initialized, setInitialized] = useState(false); 
+   const { user, logout } = useSessionContext();
   const [selectedExit, setSelectedExit] = useState<ExitCondition[]>(
     [{
       id: crypto.randomUUID(),
@@ -778,6 +779,12 @@ useEffect(() => {
               <DollarSign className="w-4 h-4" />
               Firmar
             </Button>
+          )}
+
+          {user && (
+            <button onClick={logout} className="bg-red-500 text-white px-3 py-1 rounded">
+              Cerrar Sesión
+            </button>
           )}
         </div>
       </div>
