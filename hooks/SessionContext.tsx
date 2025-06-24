@@ -33,6 +33,7 @@ const router = useRouter();
 
   const logout = () => {
     sessionStorage.removeItem('user');
+    sessionStorage.removeItem('contracts');
     setUser(null);
     router.push('/Login')
   };
