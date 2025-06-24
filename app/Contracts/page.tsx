@@ -732,6 +732,34 @@ useEffect(() => {
   fetchContracts();
 }, []);
 
+const confirmLogout = () => {
+  debugger;
+  toast.custom((t) => (
+    <div className="bg-white rounded-md shadow-lg p-4 w-72">
+      <p className="text-sm text-gray-700 mb-4">
+        ¿Está seguro que desea cerrar sesión? Los cambios en sus contratos se perderán a menos que hayan sido guardados.
+      </p>
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={() => toast.dismiss()}
+          className="px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={() => {
+            logout();
+            toast.dismiss();
+          }}
+          className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+        >
+          Cerrar sesión
+        </button>
+      </div>
+    </div>
+  ));
+};
+
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Header */}
@@ -782,9 +810,9 @@ useEffect(() => {
           )}
 
           {user && (
-            <button onClick={logout} className="bg-red-500 text-white px-3 py-1 rounded">
+            <Button variant="destructive" onClick={confirmLogout}>
               Cerrar Sesión
-            </button>
+            </Button>
           )}
         </div>
       </div>
